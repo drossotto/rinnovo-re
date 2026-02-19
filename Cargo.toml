@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+
+members = [
+    "crates/rnb_format",
+    "crates/rnb_store",
+    "crates/rnb_index",
+    "crates/rnb_engine",
+    "crates/rnb_build",
+    "crates/rnb_py"
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"

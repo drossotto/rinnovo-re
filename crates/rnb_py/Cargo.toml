@@ -1,0 +1,11 @@
+[package]
+name = "rnb_py"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.20", features = ["extension-module"] }
+rnb_engine = { path = "../rnb_engine" }

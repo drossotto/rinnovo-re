@@ -1,0 +1,9 @@
+[package]
+name = "rnb_engine"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+rnb_format = { path = "../rnb_format" }
+rnb_store = { path = "../rnb_store" }
+rnb_index = { path = "../rnb_index" }

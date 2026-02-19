@@ -4,3 +4,30 @@ docs/latex/build/
 *.out
 *.toc
 *.synctex.gz
+
+
+# Python virtual env and cache
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Python packaging / build
+build/
+dist/
+*.egg-info/
+
+# Rust build artifacts
+target/
+
+# Maturin / wheels
+*.whl
+
+.DS_Store
+Thumbs.db
+
+.vscode/
+.idea/
+
+*.log
