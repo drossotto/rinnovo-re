@@ -1,7 +1,6 @@
-target/
-__pycache__/
-*.pyc
-.env
-.venv/
-dist/
-*.egg-info/
+docs/latex/build/
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
