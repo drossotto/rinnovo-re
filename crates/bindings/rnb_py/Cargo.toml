@@ -8,4 +8,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { version = "0.20", features = ["extension-module"] }
-rnb_engine = { path = "../rnb_engine" }
+rnb_engine = { path = "../../runtime/rnb_engine" }

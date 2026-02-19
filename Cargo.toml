@@ -2,12 +2,12 @@
 resolver = "2"
 
 members = [
-    "crates/rnb_format",
-    "crates/rnb_store",
-    "crates/rnb_index",
-    "crates/rnb_engine",
-    "crates/rnb_build",
-    "crates/rnb_py"
+  "crates/kernel/rnb_format",
+  "crates/kernel/rnb_store",
+  "crates/kernel/rnb_index",
+  "crates/runtime/rnb_engine",
+  "crates/tools/rnb_build",
+  "crates/bindings/rnb_py",
 ]
 
 [workspace.package]
