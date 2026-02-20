@@ -1,0 +1,148 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{hyperref}
+
+\title{Rinnovo Binary (RNB): Artifact Format and Runtime}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Overview}
+
+Rinnovo Binary (RNB) is a single-file container format and runtime
+interface for biological datasets. An \emph{RNB artifact} is a compiled,
+portable representation of a biological dataset and its semantics:
+once produced, the artifact can be opened by a runtime to answer
+queries without requiring the original workflow, intermediate files,
+or ad-hoc glue code.
+
+Conceptually, RNB sits between file formats and databases:
+\begin{itemize}
+  \item like a file format, an RNB artifact is self-contained, easily
+        distributed with publications and collaborations, and can be
+        version-controlled;
+  \item like a database, it offers a typed, segment-based layout
+        designed for memory-mapped access and deterministic query
+        performance.
+\end{itemize}
+
+The goals of the format and runtime are:
+\begin{itemize}
+  \item \textbf{Semantic stability}: the logical model (objects,
+        relationships, and query kernels) should be stable even as
+        physical layouts evolve;
+  \item \textbf{Determinism}: compiling the same semantic input must
+        produce bit-for-bit identical artifacts;
+  \item \textbf{Performance}: common analyses should be expressible as
+        simple, bounded-time operations over memory-mapped segments;
+  \item \textbf{Portability}: the on-disk format should be simple
+        enough to reimplement in multiple languages with a small,
+        auditable code footprint.
+\end{itemize}
+
+\section{File Layout and Manifest}
+
+This section describes the top-level binary layout of an RNB artifact
+and the role of the manifest segment as the semantic contract between
+artifacts and runtimes.
+
+\subsection{File Layout}
+
+Every RNB artifact has the following high-level structure:
+\begin{verbatim}
+[RNB HEADER][SEGMENT DATA ...][SEGMENT DIRECTORY]
+\end{verbatim}
+
+\paragraph{Header.}
+The header is a fixed-size structure containing:
+\begin{itemize}
+  \item magic bytes: \verb|RNB\0|;
+  \item version: 16-bit major and minor fields;
+  \item directory offset: 64-bit little-endian file offset to the
+        segment directory;
+  \item directory length: 64-bit little-endian length in bytes of the
+        segment directory.
+\end{itemize}
+
+The header is validated on open (magic and version), after which the
+runtime locates and parses the directory.
+
+\paragraph{Segment directory.}
+The segment directory is an array of fixed-width entries. Each entry
+describes a single segment:
+\begin{itemize}
+  \item \verb|segment_id| (u32): a caller-assigned identifier for the
+        segment instance;
+  \item \verb|segment_type| (u32): the logical type of the segment,
+        drawn from an enumerated \texttt{SegmentType};
+  \item \verb|offset| (u64): byte offset of the segment payload
+        relative to the beginning of the file;
+  \item \verb|length| (u64): length in bytes of the segment payload;
+  \item \verb|checksum| (u64): a 64-bit FNV-1a checksum over the
+        segment payload.
+\end{itemize}
+
+Unknown \verb|segment_type| values are required to be skippable:
+readers can safely ignore segments they do not understand by using
+only the directory metadata.
+
+\subsection{Manifest Segment}
+
+The manifest segment (segment type \texttt{Manifest}) is required and
+must appear exactly once in every RNB artifact. It is the primary
+semantic descriptor for the file: it declares which segment types are
+required, which query kernels are supported, and global configuration
+parameters such as maximum chunk size.
+
+\paragraph{Binary layout.}
+The manifest segment is a versioned, little-endian structure:
+\begin{itemize}
+  \item magic: \verb|MNF\0| (4 bytes);
+  \item version: 16-bit major and minor fields (currently 0 and 1);
+  \item \verb|flags| (u32): reserved for future format-level options;
+  \item \verb|required_segment_count| (u32);
+  \item \verb|supported_kernel_count| (u32);
+  \item \verb|max_chunk_bytes| (u32): an advisory upper bound on chunk
+        sizes for streaming or incremental processing;
+  \item \verb|reserved| (u32): must be zero;
+  \item \verb|required_segments|: an array of
+        \verb|required_segment_count| 32-bit values, each encoding a
+        \texttt{SegmentType};
+  \item \verb|supported_kernels|: an array of
+        \verb|supported_kernel_count| 32-bit values, each encoding a
+        \texttt{QueryKernel}.
+\end{itemize}
+
+Unknown \texttt{SegmentType} or \texttt{QueryKernel} identifiers are
+treated as hard errors when parsing the manifest: they indicate that
+the artifact requires capabilities beyond what the current runtime
+understands.
+
+\paragraph{Required segments.}
+The \verb|required_segments| list expresses a semantic requirement:
+for each listed \texttt{SegmentType}, at least one directory entry
+with a matching \verb|segment_type| value MUST be present. The RNB
+container loader enforces this invariant when opening an artifact: if
+any required segment type declared in the manifest is absent from the
+directory, the artifact is rejected as invalid.
+
+This mechanism decouples the manifest from specific segment IDs while
+still allowing the runtime to rely on the presence of certain segment
+types (for example, a global string dictionary or an object table) in
+order to implement higher-level query kernels.
+
+\paragraph{Supported kernels.}
+The \verb|supported_kernels| list advertises the set of query kernels
+that the artifact is capable of serving. Each kernel is identified by
+an integer \texttt{QueryKernel} value (e.g.,
+\texttt{GetObjectById = 1}). The mapping from kernel identifiers to
+behavior is defined at the runtime level, but the manifest ensures
+that a client can discover, at open time, which kernels are supported
+for a given artifact.
+
+\end{document}

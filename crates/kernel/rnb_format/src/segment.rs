@@ -2,11 +2,19 @@
 
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-// Defines the type of structures that can be included in the RNB format. 
+// Defines the type of structures that can be included in the RNB format.
 pub enum SegmentType {
     Manifest = 1,
-    /// String dictionary segment holding deduplicated UTF‑8 strings.
+    /// String dictionary segment holding deduplicated UTF-8 strings.
     StringDict = 2,
+    /// Object table mapping object IDs to basic metadata.
+    ObjectTable = 3,
+    /// Attribute table storing sparse key/value metadata.
+    AttributeTable = 4,
+    /// Relation table storing edges between objects.
+    RelationTable = 5,
+    /// Dense numeric matrix payload.
+    NumericMatrix = 6,
 }
 
 impl SegmentType {
@@ -14,6 +22,10 @@ impl SegmentType {
         match value {
             1 => Some(SegmentType::Manifest),
             2 => Some(SegmentType::StringDict),
+            3 => Some(SegmentType::ObjectTable),
+            4 => Some(SegmentType::AttributeTable),
+            5 => Some(SegmentType::RelationTable),
+            6 => Some(SegmentType::NumericMatrix),
             _ => None,
         }
     }

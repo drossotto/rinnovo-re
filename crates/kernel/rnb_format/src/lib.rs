@@ -5,12 +5,20 @@ mod directory;
 mod segment;
 mod manifest;
 mod string_dict;
+mod object_table;
+mod attribute_table;
+mod relation_table;
+mod numeric_matrix;
 
 pub use header::{RnbHeader, RNB_MAGIC, RNB_VERSION_MAJOR, RNB_VERSION_MINOR};
 pub use directory::{RnbDirectory, RnbDirEntry};
 pub use segment::{SegmentType, QueryKernel};
 pub use manifest::{Manifest, checksum64_fnv1a};
 pub use string_dict::StringDict;
+pub use object_table::{ObjectTable, ObjectRecord};
+pub use attribute_table::{AttributeTable, AttributeRecord};
+pub use relation_table::{RelationTable, RelationRecord};
+pub use numeric_matrix::{NumericMatrix, NumericType};
 
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -115,6 +123,20 @@ pub fn open_rnb(path: impl AsRef<Path>) -> std::io::Result<RnbFile> {
         ));
     }
     let manifest = Manifest::read_from(&manifest_bytes[..])?;
+
+    // Ensure that all manifest-declared required segments are actually present
+    // in the directory. This ties the semantic contract (manifest) to the
+    // physical layout (directory entries).
+    for req in &manifest.required_segments {
+        let st = req.as_u32();
+        let found = directory.entries.iter().any(|e| e.segment_type == st);
+        if !found {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "missing required segment declared in manifest",
+            ));
+        }
+    }
 
     // --- Read optional StringDict ---
     let dict_entry = directory
