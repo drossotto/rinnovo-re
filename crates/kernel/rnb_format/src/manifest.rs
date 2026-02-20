@@ -130,8 +130,7 @@ impl Manifest {
     }
 }
 
-/// Simple, dependency-free 64-bit FNV-1a checksum.
-/// Not cryptographic — just a fast integrity check.
+/// Simple, dependency-free 64-bit FNV-1a checksum for segment data integrity. 
 pub fn checksum64_fnv1a(bytes: &[u8]) -> u64 {
     const OFFSET: u64 = 0xcbf29ce484222325;
     const PRIME: u64 = 0x100000001b3;

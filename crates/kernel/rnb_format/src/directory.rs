@@ -41,7 +41,7 @@ impl RnbDirectory {
     }
 
     pub fn read_from<R: Read>(mut r: R, dir_len: u64) -> std::io::Result<Self> {
-        // Directory header: count (u32) + reserved (u32) = 8 bytes
+        // Directory header: count + reserved = 8 bytes
         if dir_len < 8 {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,

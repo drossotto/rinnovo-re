@@ -1,4 +1,5 @@
 // crates/kernel/rnb_format/src/header.rs
+
 use std::io::{Read, Write};
 
 pub const RNB_MAGIC: [u8; 4] = *b"RNB\0";
