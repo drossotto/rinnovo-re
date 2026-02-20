@@ -20,10 +20,9 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Install MkDocs
+      - name: Install Zensical
         run: |
-          pip install mkdocs mkdocs-material
+          pip install zensical mkdocs-material
 
       - name: Build docs
-        run: mkdocs build --strict
-
+        run: zensical build

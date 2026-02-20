@@ -10,3 +10,13 @@ build-py:
 
 publish-py:
 	maturin publish --release --manifest-path crates/bindings/rnb_py/Cargo.toml
+
+test-docs:
+	@echo "Building Zensical site..."
+	zensical build
+	@echo "Compiling LaTeX spec..."
+	$(MAKE) compile-latex-doc
+
+test-all:
+	$(MAKE) run-common-tests
+	$(MAKE) test-docs

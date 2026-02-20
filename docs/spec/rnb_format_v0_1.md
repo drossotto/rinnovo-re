@@ -112,6 +112,32 @@ ame_sid.
 
 ---
 
+## Objects (logical view, v0.1)
+
+RNB defines a simple logical object model layered on top of the Object
+Table segment:
+
+- each row in the Object Table corresponds to an `object_id` equal to
+  the row index (0-based);
+- the `type_sid` and `name_sid` fields are string identifiers into the
+  global String Dictionary segment;
+- additional optional segments (AttributeTable, RelationTable,
+  NumericMatrix) may attach further metadata, relationships, or
+  payloads to objects by referring to their `object_id`.
+
+The runtime exposes this as a stable `Object` view with fields:
+
+- `id` (u32) — the object_id;
+- `type_sid` (u32) — type/kind identifier (StringDict ID);
+- `name_sid` (u32) — primary label/name (StringDict ID);
+- `flags` (u32) — reserved for future use.
+
+This logical view is derived purely from the Object Table segment and
+does not constrain later layout optimizations (e.g. columnar storage),
+as long as the semantics above are preserved.
+
+---
+
 ## Design Rules
 
 - Unknown segment types MUST be skippable

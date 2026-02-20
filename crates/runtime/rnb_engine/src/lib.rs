@@ -1,5 +1,11 @@
 use std::path::Path;
 
+pub mod artifact;
+pub mod object;
+
+pub use artifact::Artifact;
+pub use object::Object;
+
 pub use rnb_format::{
     AttributeRecord,
     AttributeTable,
@@ -26,10 +32,9 @@ pub fn write_empty(path: impl AsRef<Path>) -> std::io::Result<()> {
     rnb_format::write_empty_rnb(path)
 }
 
-/// Open an RNB artifact and parse the header, directory, manifest,
-/// and any required invariants enforced at the container level.
-pub fn open(path: impl AsRef<Path>) -> std::io::Result<RnbFile> {
-    rnb_format::open_rnb(path)
+/// Open an RNB artifact and return a high-level `Artifact` wrapper.
+pub fn open(path: impl AsRef<Path>) -> std::io::Result<Artifact> {
+    Artifact::open(path)
 }
 
 #[cfg(test)]
@@ -42,10 +47,51 @@ mod tests {
         p.push(format!("rnb_engine_roundtrip_{}.rnb", std::process::id()));
 
         write_empty(&p).unwrap();
-        let f = open(&p).unwrap();
+        let art = open(&p).unwrap();
 
-        assert_eq!(&f.header.magic, b"RNB\0");
-        assert!(!f.directory.entries.is_empty());
+        assert_eq!(&art.header().magic, b"RNB\0");
+        assert!(!art.directory().entries.is_empty());
+        assert!(art.manifest().required_segments.contains(&SegmentType::Manifest));
+
+        let _ = std::fs::remove_file(&p);
+    }
+
+    #[test]
+    fn artifact_exposes_object_table() {
+        use rnb_format::{Manifest, ObjectRecord, ObjectTable};
+
+        let manifest = Manifest::minimal();
+
+        // Build a small object table.
+        let mut ot = ObjectTable::empty();
+        ot.push(ObjectRecord { type_sid: 1, name_sid: 10, flags: 0 });
+        ot.push(ObjectRecord { type_sid: 2, name_sid: 20, flags: 1 });
+
+        let mut p = std::env::temp_dir();
+        p.push(format!("rnb_engine_objects_{}.rnb", std::process::id()));
+
+        // Write an artifact with manifest + object table (no string dict needed yet).
+        rnb_format::write_minimal_rnb(&p, &manifest, None, Some(&ot)).unwrap();
+
+        let art = open(&p).unwrap();
+
+        // The object table should be visible through the Artifact wrapper.
+        assert_eq!(art.object_count(), Some(2));
+
+        let o0 = art.get_object(0).expect("object 0");
+        assert_eq!(o0.id, 0);
+        assert_eq!(o0.type_sid, 1);
+        assert_eq!(o0.name_sid, 10);
+        assert_eq!(o0.flags, 0);
+
+        let o1 = art.get_object(1).expect("object 1");
+        assert_eq!(o1.id, 1);
+        assert_eq!(o1.type_sid, 2);
+        assert_eq!(o1.name_sid, 20);
+        assert_eq!(o1.flags, 1);
+
+        // Out of range IDs should return None.
+        assert!(art.get_object(2).is_none());
 
         let _ = std::fs::remove_file(&p);
     }

@@ -145,4 +145,87 @@ behavior is defined at the runtime level, but the manifest ensures
 that a client can discover, at open time, which kernels are supported
 for a given artifact.
 
+\section{Segments for Strings and Objects}
+
+This section summarizes the core segments used to describe strings and
+objects in RNB v0.1. Each segment has a small, fixed-width header and
+is designed to support constant-time offset computations under
+memory-mapping.
+
+\subsection{String Dictionary Segment}
+
+The String Dictionary segment (\texttt{SegmentType::StringDict = 2})
+stores a compact dictionary of UTF-8 strings used elsewhere in the
+artifact. Its layout is:
+\begin{itemize}
+  \item magic: \verb|SDCT| (4 bytes);
+  \item version: 16-bit major and minor fields (currently 0 and 1);
+  \item \verb|string_count| (u32);
+  \item \verb|blob_len| (u32): total number of bytes in the UTF-8 blob;
+  \item \verb|offsets|: an array of \verb|string_count + 1| 32-bit
+        offsets into the blob;
+  \item \verb|blob|: \verb|blob_len| bytes of concatenated UTF-8
+        string data.
+\end{itemize}
+
+The \verb|offsets[i]| and \verb|offsets[i+1]| entries delimit the byte
+range of string $i$ within the blob. Offsets MUST start at 0, MUST be
+non-decreasing, and the final offset MUST equal \verb|blob_len|.
+Strings MUST be valid UTF-8. This layout supports constant-time
+lookup of a string by its integer identifier.
+
+\subsection{Object Table Segment}
+\label{sec:object-table}
+
+The Object Table segment (\texttt{SegmentType::ObjectTable = 3})
+provides a minimal, fixed-width mapping from object identifiers to
+basic metadata. It is laid out as:
+\begin{itemize}
+  \item magic: \verb|OBT\0| (4 bytes);
+  \item version: 16-bit major and minor fields (currently 0 and 1);
+  \item \verb|object_count| (u32);
+  \item \verb|reserved| (u32): must be zero;
+  \item rows: \verb|object_count| repetitions of:
+  \begin{itemize}
+    \item \verb|type_sid| (u32): StringDict ID for the object's
+          type/kind;
+    \item \verb|name_sid| (u32): StringDict ID for a primary
+          label/name;
+    \item \verb|flags| (u32): reserved for future use.
+  \end{itemize}
+\end{itemize}
+
+By construction, the $i$-th row (0-based) corresponds to
+\verb|object_id = i|. This allows constant-time access to object
+metadata by identifier using simple offset arithmetic.
+
+\section{Logical Object Model}
+
+The logical object model exposed by the runtime is a thin semantic
+layer over the Object Table and String Dictionary segments.
+
+Each object is identified by an unsigned 32-bit \verb|object_id|,
+which is defined to be the row index in the Object Table segment. The
+runtime presents a stable view:
+\begin{verbatim}
+struct Object {
+    id: u32;
+    type_sid: u32;
+    name_sid: u32;
+    flags: u32;
+}
+\end{verbatim}
+
+where \verb|type_sid| and \verb|name_sid| are StringDict identifiers
+into the global dictionary. Additional segments such as the attribute
+table, relation table, or numeric matrices may attach further
+information to objects by referring to their \verb|object_id|, but the
+core identity and basic metadata of an object are derived solely from
+the Object Table.
+
+This separation between on-disk segments and the logical object view
+allows the physical layout to evolve (for example, using columnar
+storage or indices) without changing the semantics seen by callers of
+the runtime.
+
 \end{document}

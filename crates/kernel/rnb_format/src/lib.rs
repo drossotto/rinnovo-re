@@ -30,17 +30,24 @@ pub struct RnbFile {
     pub directory: RnbDirectory,
     pub manifest: Manifest,
     pub string_dict: Option<StringDict>,
+    pub object_table: Option<ObjectTable>,
 }
 
 pub fn write_empty_rnb(path: impl AsRef<Path>) -> std::io::Result<()> {
     // Minimal valid artifact now includes manifest + (for commit 5) an empty dict by default.
-    write_minimal_rnb(path, &Manifest::minimal(), Some(&StringDict::empty()))
+    write_minimal_rnb(
+        path,
+        &Manifest::minimal(),
+        Some(&StringDict::empty()),
+        None,
+    )
 }
 
 pub fn write_minimal_rnb(
     path: impl AsRef<Path>,
     manifest: &Manifest,
     string_dict: Option<&StringDict>,
+    object_table: Option<&ObjectTable>,
 ) -> std::io::Result<()> {
     let mut f = File::create(path)?;
 
@@ -73,6 +80,25 @@ pub fn write_minimal_rnb(
         });
     }
 
+    // --- ObjectTable segment (optional) ---
+    let mut obj_entry: Option<RnbDirEntry> = None;
+    if let Some(ot) = object_table {
+        let mut buf: Vec<u8> = Vec::new();
+        ot.write_to(&mut buf)?;
+        let checksum = checksum64_fnv1a(&buf);
+        let offset = f.stream_position()?;
+        f.write_all(&buf)?;
+        let len = buf.len() as u64;
+
+        obj_entry = Some(RnbDirEntry {
+            segment_id: 3,
+            segment_type: SegmentType::ObjectTable.as_u32(),
+            offset,
+            length: len,
+            checksum64: checksum,
+        });
+    }
+
     // --- Directory at end ---
     let dir_offset = f.stream_position()?;
     let mut entries = Vec::new();
@@ -84,6 +110,9 @@ pub fn write_minimal_rnb(
         checksum64: manifest_checksum,
     });
     if let Some(e) = dict_entry {
+        entries.push(e);
+    }
+    if let Some(e) = obj_entry {
         entries.push(e);
     }
 
@@ -158,11 +187,32 @@ pub fn open_rnb(path: impl AsRef<Path>) -> std::io::Result<RnbFile> {
         None
     };
 
+    // --- Read optional ObjectTable ---
+    let obj_entry = directory
+        .entries
+        .iter()
+        .find(|e| e.segment_type == SegmentType::ObjectTable.as_u32());
+
+    let object_table = if let Some(e) = obj_entry {
+        let bytes = read_segment_bytes(&mut f, e)?;
+        let got = checksum64_fnv1a(&bytes);
+        if got != e.checksum64 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "object table checksum mismatch",
+            ));
+        }
+        Some(ObjectTable::read_from(&bytes[..])?)
+    } else {
+        None
+    };
+
     Ok(RnbFile {
         header,
         directory,
         manifest,
         string_dict,
+        object_table,
     })
 }
 

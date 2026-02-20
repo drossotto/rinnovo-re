@@ -3,7 +3,6 @@ use pyo3::types::PyBytes;
 
 use rnb_engine;
 
-// Simple hello to verify extension is importable.
 #[pyfunction]
 fn hello() -> String {
     "rinnovo ready".to_string()
@@ -69,12 +68,11 @@ pub struct RnbFilePy {
     pub manifest: Manifest,
 }
 
-impl From<rnb_engine::RnbFile> for RnbFilePy {
-    fn from(f: rnb_engine::RnbFile) -> Self {
-        Self {
-            header: Header::from(f.header),
-            manifest: Manifest::from(f.manifest),
-        }
+impl From<rnb_engine::Artifact> for RnbFilePy {
+    fn from(a: rnb_engine::Artifact) -> Self {
+        let header = Header::from(*a.header());
+        let manifest = Manifest::from(a.manifest().clone());
+        Self { header, manifest }
     }
 }
 
@@ -87,12 +85,9 @@ fn write_empty(path: &str) -> PyResult<()> {
 /// Open an RNB artifact and return a lightweight Python view.
 #[pyfunction]
 fn open(_py: Python<'_>, path: &str) -> PyResult<RnbFilePy> {
-    // Ensure the error is surfaced as IOError to Python.
-    let f = rnb_engine::open(path)
+    let art = rnb_engine::open(path)
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(e.to_string()))?;
-    // Optionally, we could expose directory or raw bytes later; for now
-    // we return just header + manifest to keep the surface minimal.
-    Ok(RnbFilePy::from(f))
+    Ok(RnbFilePy::from(art))
 }
 
 /// Convenience: return the raw manifest bytes for an artifact.
