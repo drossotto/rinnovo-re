@@ -4,33 +4,16 @@ mod header;
 mod directory;
 mod segment;
 mod manifest;
+mod string_dict;
 
-pub use header::{
-    RnbHeader, 
-    RNB_MAGIC, 
-    RNB_VERSION_MAJOR, 
-    RNB_VERSION_MINOR
-};
-pub use directory::{
-    RnbDirectory, 
-    RnbDirEntry
-};
-pub use segment::{
-    SegmentType, 
-    QueryKernel
-};
-pub use manifest::{
-    Manifest, 
-    checksum64_fnv1a
-};
+pub use header::{RnbHeader, RNB_MAGIC, RNB_VERSION_MAJOR, RNB_VERSION_MINOR};
+pub use directory::{RnbDirectory, RnbDirEntry};
+pub use segment::{SegmentType, QueryKernel};
+pub use manifest::{Manifest, checksum64_fnv1a};
+pub use string_dict::StringDict;
 
 use std::fs::File;
-use std::io::{
-    Read, 
-    Seek, 
-    SeekFrom, 
-    Write
-};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,78 +21,92 @@ pub struct RnbFile {
     pub header: RnbHeader,
     pub directory: RnbDirectory,
     pub manifest: Manifest,
+    pub string_dict: Option<StringDict>,
 }
 
 pub fn write_empty_rnb(path: impl AsRef<Path>) -> std::io::Result<()> {
-    write_minimal_rnb(path, &Manifest::minimal())
+    // Minimal valid artifact now includes manifest + (for commit 5) an empty dict by default.
+    write_minimal_rnb(path, &Manifest::minimal(), Some(&StringDict::empty()))
 }
 
-pub fn write_minimal_rnb(path: impl AsRef<Path>, manifest: &Manifest) -> std::io::Result<()> {
+pub fn write_minimal_rnb(
+    path: impl AsRef<Path>,
+    manifest: &Manifest,
+    string_dict: Option<&StringDict>,
+) -> std::io::Result<()> {
     let mut f = File::create(path)?;
 
-    // TODO: Patch dir_offset/dir_len
     let mut header = RnbHeader::new();
     header.write_to(&mut f)?;
 
-    // Write manifest bytes to a buffer so we can checksum + know length
+    // --- Manifest segment ---
     let mut manifest_bytes: Vec<u8> = Vec::new();
     manifest.write_to(&mut manifest_bytes)?;
     let manifest_checksum = checksum64_fnv1a(&manifest_bytes);
-
-    // Write manifest segment to file
     let manifest_offset = f.stream_position()?;
     f.write_all(&manifest_bytes)?;
     let manifest_len = manifest_bytes.len() as u64;
 
-    // Write directory at end with one entry (manifest)
+    // --- StringDict segment (optional) ---
+    let mut dict_entry: Option<RnbDirEntry> = None;
+    if let Some(sd) = string_dict {
+        let dict_bytes = sd.to_bytes()?;
+        let dict_checksum = checksum64_fnv1a(&dict_bytes);
+        let dict_offset = f.stream_position()?;
+        f.write_all(&dict_bytes)?;
+        let dict_len = dict_bytes.len() as u64;
+
+        dict_entry = Some(RnbDirEntry {
+            segment_id: 2,
+            segment_type: SegmentType::StringDict.as_u32(),
+            offset: dict_offset,
+            length: dict_len,
+            checksum64: dict_checksum,
+        });
+    }
+
+    // --- Directory at end ---
     let dir_offset = f.stream_position()?;
-    let dir = RnbDirectory {
-        entries: vec![RnbDirEntry {
-            segment_id: 1,
-            segment_type: SegmentType::Manifest.as_u32(),
-            offset: manifest_offset,
-            length: manifest_len,
-            checksum64: manifest_checksum,
-        }],
-    };
+    let mut entries = Vec::new();
+    entries.push(RnbDirEntry {
+        segment_id: 1,
+        segment_type: SegmentType::Manifest.as_u32(),
+        offset: manifest_offset,
+        length: manifest_len,
+        checksum64: manifest_checksum,
+    });
+    if let Some(e) = dict_entry {
+        entries.push(e);
+    }
+
+    let dir = RnbDirectory { entries };
     dir.write_to(&mut f)?;
     let dir_end = f.stream_position()?;
 
-    // Patch header with directory location
     header.dir_offset = dir_offset;
     header.dir_len = dir_end - dir_offset;
 
-    // Rewrite header at file start
     f.seek(SeekFrom::Start(0))?;
     header.write_to(&mut f)?;
 
     Ok(())
 }
 
-/// Opens an .rnb and returns the parsed header, directory, and manifest.
-/// Open-time cost is bounded: header + directory + manifest.
 pub fn open_rnb(path: impl AsRef<Path>) -> std::io::Result<RnbFile> {
     let mut f = File::open(path)?;
-
     let header = RnbHeader::read_from(&mut f)?;
 
-    // Read directory
     f.seek(SeekFrom::Start(header.dir_offset))?;
     let directory = RnbDirectory::read_from(&mut f, header.dir_len)?;
 
-    // Find manifest entry
+    // --- Read manifest ---
     let manifest_entry = directory
         .entries
         .iter()
         .find(|e| e.segment_type == SegmentType::Manifest.as_u32())
-        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "missing manifest segment"))?;
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "missing manifest"))?;
 
-    // Read manifest bytes
-    f.seek(SeekFrom::Start(manifest_entry.offset))?;
-    let mut manifest_bytes = vec![0u8; manifest_entry.length as usize];
-    f.read_exact(&mut manifest_bytes)?;
-
-    // Verify checksum
+    let manifest_bytes = read_segment_bytes(&mut f, manifest_entry)?;
     let got = checksum64_fnv1a(&manifest_bytes);
     if got != manifest_entry.checksum64 {
         return Err(std::io::Error::new(
@@ -117,13 +114,39 @@ pub fn open_rnb(path: impl AsRef<Path>) -> std::io::Result<RnbFile> {
             "manifest checksum mismatch",
         ));
     }
-
-    // Parse manifest
     let manifest = Manifest::read_from(&manifest_bytes[..])?;
+
+    // --- Read optional StringDict ---
+    let dict_entry = directory
+        .entries
+        .iter()
+        .find(|e| e.segment_type == SegmentType::StringDict.as_u32());
+
+    let string_dict = if let Some(e) = dict_entry {
+        let bytes = read_segment_bytes(&mut f, e)?;
+        let got = checksum64_fnv1a(&bytes);
+        if got != e.checksum64 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "string dict checksum mismatch",
+            ));
+        }
+        Some(StringDict::from_bytes(&bytes[..])?)
+    } else {
+        None
+    };
 
     Ok(RnbFile {
         header,
         directory,
         manifest,
+        string_dict,
     })
+}
+
+fn read_segment_bytes(f: &mut File, e: &RnbDirEntry) -> std::io::Result<Vec<u8>> {
+    f.seek(SeekFrom::Start(e.offset))?;
+    let mut buf = vec![0u8; e.length as usize];
+    f.read_exact(&mut buf)?;
+    Ok(buf)
 }
