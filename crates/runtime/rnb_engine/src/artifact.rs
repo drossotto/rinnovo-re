@@ -1,11 +1,14 @@
 use std::path::Path;
 
 use crate::{
+    AttributeTable,
     Manifest,
     ObjectTable,
+    RelationTable,
     RnbDirectory,
     RnbFile,
     RnbHeader,
+    NumericMatrix,
     StringDict,
 };
 
@@ -52,5 +55,20 @@ impl Artifact {
     pub fn object_table(&self) -> Option<&ObjectTable> {
         self.inner.object_table.as_ref()
     }
-}
 
+    pub fn attribute_table(&self) -> Option<&AttributeTable> {
+        self.inner.attribute_table.as_ref()
+    }
+
+    pub fn relation_table(&self) -> Option<&RelationTable> {
+        self.inner.relation_table.as_ref()
+    }
+
+    /// Return the first numeric matrix segment, if present.
+    ///
+    /// The container format allows multiple NumericMatrix segments,
+    /// but the engine currently exposes a single primary matrix view.
+    pub fn numeric_matrix(&self) -> Option<&NumericMatrix> {
+        self.inner.numeric_matrix.as_ref()
+    }
+}

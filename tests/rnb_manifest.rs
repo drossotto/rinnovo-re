@@ -15,6 +15,17 @@ fn manifest_serialization_roundtrip() {
 }
 
 #[test]
+fn minimal_manifest_advertises_kernels() {
+    use rnb_format::QueryKernel;
+
+    let m = rnb_format::Manifest::minimal();
+
+    // Minimal manifests should opt into the core kernels we support.
+    assert!(m.supported_kernels.contains(&QueryKernel::GetObjectById));
+    assert!(m.supported_kernels.contains(&QueryKernel::ObjectsByType));
+}
+
+#[test]
 fn open_rnb_enforces_required_segments() {
     use rnb_format::{Manifest, SegmentType, StringDict};
 

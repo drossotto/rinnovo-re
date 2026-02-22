@@ -24,13 +24,16 @@ use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RnbFile {
     pub header: RnbHeader,
     pub directory: RnbDirectory,
     pub manifest: Manifest,
     pub string_dict: Option<StringDict>,
     pub object_table: Option<ObjectTable>,
+    pub attribute_table: Option<AttributeTable>,
+    pub relation_table: Option<RelationTable>,
+    pub numeric_matrix: Option<NumericMatrix>,
 }
 
 pub fn write_empty_rnb(path: impl AsRef<Path>) -> std::io::Result<()> {
@@ -207,12 +210,75 @@ pub fn open_rnb(path: impl AsRef<Path>) -> std::io::Result<RnbFile> {
         None
     };
 
+    // --- Read optional AttributeTable ---
+    let attr_entry = directory
+        .entries
+        .iter()
+        .find(|e| e.segment_type == SegmentType::AttributeTable.as_u32());
+
+    let attribute_table = if let Some(e) = attr_entry {
+        let bytes = read_segment_bytes(&mut f, e)?;
+        let got = checksum64_fnv1a(&bytes);
+        if got != e.checksum64 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "attribute table checksum mismatch",
+            ));
+        }
+        Some(AttributeTable::read_from(&bytes[..])?)
+    } else {
+        None
+    };
+
+    // --- Read optional RelationTable ---
+    let rel_entry = directory
+        .entries
+        .iter()
+        .find(|e| e.segment_type == SegmentType::RelationTable.as_u32());
+
+    let relation_table = if let Some(e) = rel_entry {
+        let bytes = read_segment_bytes(&mut f, e)?;
+        let got = checksum64_fnv1a(&bytes);
+        if got != e.checksum64 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "relation table checksum mismatch",
+            ));
+        }
+        Some(RelationTable::read_from(&bytes[..])?)
+    } else {
+        None
+    };
+
+    // --- Read optional NumericMatrix ---
+    let num_entry = directory
+        .entries
+        .iter()
+        .find(|e| e.segment_type == SegmentType::NumericMatrix.as_u32());
+
+    let numeric_matrix = if let Some(e) = num_entry {
+        let bytes = read_segment_bytes(&mut f, e)?;
+        let got = checksum64_fnv1a(&bytes);
+        if got != e.checksum64 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "numeric matrix checksum mismatch",
+            ));
+        }
+        Some(NumericMatrix::read_from(&bytes[..])?)
+    } else {
+        None
+    };
+
     Ok(RnbFile {
         header,
         directory,
         manifest,
         string_dict,
         object_table,
+        attribute_table,
+        relation_table,
+        numeric_matrix,
     })
 }
 

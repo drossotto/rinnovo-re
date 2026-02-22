@@ -15,6 +15,8 @@ pub use rnb_format::{
     ObjectRecord,
     ObjectTable,
     QueryKernel,
+    RelationRecord,
+    RelationTable,
     RnbDirectory,
     RnbDirEntry,
     RnbFile,
@@ -92,6 +94,70 @@ mod tests {
 
         // Out of range IDs should return None.
         assert!(art.get_object(2).is_none());
+
+        let _ = std::fs::remove_file(&p);
+    }
+
+    #[test]
+    fn artifact_execute_get_object_by_id_kernel() {
+        use rnb_format::{Manifest, ObjectRecord, ObjectTable, QueryKernel};
+
+        let manifest = Manifest::minimal();
+
+        let mut ot = ObjectTable::empty();
+        ot.push(ObjectRecord { type_sid: 1, name_sid: 10, flags: 0 });
+
+        let mut p = std::env::temp_dir();
+        p.push(format!("rnb_engine_execute_{}.rnb", std::process::id()));
+
+        rnb_format::write_minimal_rnb(&p, &manifest, None, Some(&ot)).unwrap();
+        let art = open(&p).unwrap();
+
+        // Minimal manifest should advertise GetObjectById support.
+        assert!(art.manifest().supported_kernels.contains(&QueryKernel::GetObjectById));
+
+        let result = art.execute(QueryKernel::GetObjectById, 0).unwrap();
+        assert_eq!(result.len(), 1);
+        let obj = &result[0];
+        assert_eq!(obj.id, 0);
+        assert_eq!(obj.type_sid, 1);
+        assert_eq!(obj.name_sid, 10);
+
+        let missing = art.execute(QueryKernel::GetObjectById, 1).unwrap();
+        assert!(missing.is_empty());
+
+        let _ = std::fs::remove_file(&p);
+    }
+
+    #[test]
+    fn artifact_execute_objects_by_type_kernel() {
+        use rnb_format::{Manifest, ObjectRecord, ObjectTable, QueryKernel};
+
+        let manifest = Manifest::minimal();
+
+        let mut ot = ObjectTable::empty();
+        ot.push(ObjectRecord { type_sid: 1, name_sid: 10, flags: 0 });
+        ot.push(ObjectRecord { type_sid: 2, name_sid: 20, flags: 0 });
+        ot.push(ObjectRecord { type_sid: 1, name_sid: 30, flags: 0 });
+
+        let mut p = std::env::temp_dir();
+        p.push(format!("rnb_engine_execute_type_{}.rnb", std::process::id()));
+
+        rnb_format::write_minimal_rnb(&p, &manifest, None, Some(&ot)).unwrap();
+        let art = open(&p).unwrap();
+
+        assert!(art.manifest().supported_kernels.contains(&QueryKernel::ObjectsByType));
+
+        // Use the generic execute API.
+        let objs = art.execute(QueryKernel::ObjectsByType, 1).unwrap();
+        assert_eq!(objs.len(), 2);
+        assert_eq!(objs[0].type_sid, 1);
+        assert_eq!(objs[1].type_sid, 1);
+
+        // And the convenience wrapper.
+        let objs2 = art.objects_by_type(2).unwrap();
+        assert_eq!(objs2.len(), 1);
+        assert_eq!(objs2[0].type_sid, 2);
 
         let _ = std::fs::remove_file(&p);
     }

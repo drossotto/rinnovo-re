@@ -20,3 +20,8 @@ def test_sdk_artifact_open(tmp_path: pathlib.Path):
     assert rinnovo.SEGMENT_MANIFEST in art.required_segments
     assert art.has_segment_type(rinnovo.SEGMENT_MANIFEST)
 
+    # On an empty artifact, object helpers should behave safely.
+    assert art.get_object(0) is None
+    objs = art.objects_by_type(1)
+    assert isinstance(objs, list)
+    assert len(objs) == 0

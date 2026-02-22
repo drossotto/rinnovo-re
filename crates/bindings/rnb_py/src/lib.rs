@@ -61,6 +61,30 @@ impl From<rnb_engine::Manifest> for Manifest {
 
 #[pyclass]
 #[derive(Clone)]
+pub struct Object {
+    #[pyo3(get)]
+    pub id: u32,
+    #[pyo3(get)]
+    pub type_sid: u32,
+    #[pyo3(get)]
+    pub name_sid: u32,
+    #[pyo3(get)]
+    pub flags: u32,
+}
+
+impl From<rnb_engine::Object> for Object {
+    fn from(o: rnb_engine::Object) -> Self {
+        Self {
+            id: o.id,
+            type_sid: o.type_sid,
+            name_sid: o.name_sid,
+            flags: o.flags,
+        }
+    }
+}
+
+#[pyclass]
+#[derive(Clone)]
 pub struct RnbFilePy {
     #[pyo3(get)]
     pub header: Header,
@@ -88,6 +112,28 @@ fn open(_py: Python<'_>, path: &str) -> PyResult<RnbFilePy> {
     let art = rnb_engine::open(path)
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(e.to_string()))?;
     Ok(RnbFilePy::from(art))
+}
+
+/// Execute the `GetObjectById` kernel and return at most one Object.
+#[pyfunction]
+fn get_object(path: &str, object_id: u32) -> PyResult<Option<Object>> {
+    let art = rnb_engine::open(path)
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(e.to_string()))?;
+    let objs = art
+        .execute(rnb_engine::QueryKernel::GetObjectById, object_id)
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(e.to_string()))?;
+    Ok(objs.into_iter().next().map(Object::from))
+}
+
+/// Execute the `ObjectsByType` kernel and return all matching Objects.
+#[pyfunction]
+fn objects_by_type(path: &str, type_sid: u32) -> PyResult<Vec<Object>> {
+    let art = rnb_engine::open(path)
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(e.to_string()))?;
+    let objs = art
+        .objects_by_type(type_sid)
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(e.to_string()))?;
+    Ok(objs.into_iter().map(Object::from).collect())
 }
 
 /// Convenience: return the raw manifest bytes for an artifact.
@@ -129,6 +175,8 @@ fn rinnovo(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(hello, m)?)?;
     m.add_function(wrap_pyfunction!(write_empty, m)?)?;
     m.add_function(wrap_pyfunction!(open, m)?)?;
+    m.add_function(wrap_pyfunction!(get_object, m)?)?;
+    m.add_function(wrap_pyfunction!(objects_by_type, m)?)?;
     m.add_function(wrap_pyfunction!(read_manifest_bytes, m)?)?;
 
     // Provide numeric constants for segment and kernel identifiers so
@@ -138,10 +186,12 @@ fn rinnovo(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add("SEGMENT_OBJECT_TABLE", rnb_engine::SegmentType::ObjectTable.as_u32())?;
 
     m.add("KERNEL_GET_OBJECT_BY_ID", rnb_engine::QueryKernel::GetObjectById.as_u32())?;
+    m.add("KERNEL_OBJECTS_BY_TYPE", rnb_engine::QueryKernel::ObjectsByType.as_u32())?;
 
     m.add_class::<Header>()?;
     m.add_class::<Manifest>()?;
     m.add_class::<RnbFilePy>()?;
+    m.add_class::<Object>()?;
 
     Ok(())
 }

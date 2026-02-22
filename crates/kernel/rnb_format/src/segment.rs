@@ -39,12 +39,14 @@ impl SegmentType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QueryKernel {
     GetObjectById = 1,
+    ObjectsByType = 2,
 }
 
 impl QueryKernel {
     pub fn from_u32(value: u32) -> Option<Self> {
         match value {
             1 => Some(QueryKernel::GetObjectById),
+            2 => Some(QueryKernel::ObjectsByType),
             _ => None,
         }
     }

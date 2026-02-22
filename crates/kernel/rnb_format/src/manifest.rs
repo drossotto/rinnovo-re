@@ -21,7 +21,7 @@ impl Manifest {
         Self {
             flags: 0,
             required_segments: vec![SegmentType::Manifest],
-            supported_kernels: Vec::new(),
+            supported_kernels: vec![QueryKernel::GetObjectById, QueryKernel::ObjectsByType],
             // A sane embedded-friendly default; you can tune later.
             max_chunk_bytes: 256 * 1024,
         }

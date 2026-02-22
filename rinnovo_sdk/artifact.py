@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Union
+from typing import Iterable, List, Optional, Union
 
 import rinnovo
 
@@ -49,3 +49,20 @@ class Artifact:
         """Check if a given SegmentType (by numeric id) is required."""
         return segment_type_id in self._inner.manifest.required_segments
 
+    # --- Virtual object helpers -------------------------------------------------
+
+    def get_object(self, object_id: int) -> Optional[object]:
+        """
+        Look up a single logical object by its ID.
+
+        Returns a `rinnovo.Object` instance or None.
+        """
+        return rinnovo.get_object(str(self.path), int(object_id))
+
+    def objects_by_type(self, type_sid: int) -> List[object]:
+        """
+        Return all logical objects whose `type_sid` matches the given value.
+
+        The elements are `rinnovo.Object` instances.
+        """
+        return list(rinnovo.objects_by_type(str(self.path), int(type_sid)))
