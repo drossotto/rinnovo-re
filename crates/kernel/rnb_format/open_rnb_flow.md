@@ -13,11 +13,11 @@ flowchart TD
     F --> G[read_manifest_bytes via read_segment_bytes]
     G --> H[checksum64_fnv1a(manifest_bytes)]
 
-    H -->|mismatch| X[Error: InvalidData\n\"manifest checksum mismatch\"]
+    H -->|mismatch| X[Error: manifest checksum mismatch]
     H -->|ok| I[Manifest::read_from]
 
-    I --> J[for each SegmentType in manifest.required_segments]
-    J -->|missing| Y[Error: InvalidData\n\"missing required segment\"]
+    I --> J[for each required SegmentType]
+    J -->|missing| Y[Error: missing required segment]
     J -->|all present| K[load optional segments]
 
     K --> S[StringDict?]
@@ -62,4 +62,3 @@ flowchart TD
       numeric_matrix
     }]
 ```
-
