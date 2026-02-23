@@ -36,6 +36,7 @@
         padding: 0;
         background-color: var(--bg);
         color: var(--text);
+        font-size: 16px; /* ensure consistent base size across platforms */
       }
 
       header {
@@ -61,7 +62,7 @@
 
       .title-block p {
         margin: 0.2rem 0 0;
-        font-size: 0.8rem;
+        font-size: 0.9rem;
         color: var(--muted);
       }
 
@@ -80,7 +81,7 @@
         background: var(--bg-alt);
         padding: 0.75rem 0.85rem;
         box-sizing: border-box;
-        font-size: 0.85rem;
+        font-size: 0.95rem;
       }
 
       main {
@@ -96,7 +97,7 @@
       }
 
       .sidebar-section h2 {
-        font-size: 0.8rem;
+        font-size: 0.9rem;
         margin: 0 0 0.3rem;
         text-transform: uppercase;
         letter-spacing: 0.03em;
@@ -131,12 +132,12 @@
       }
 
       p {
-        font-size: 0.85rem;
+        font-size: 0.95rem;
         margin: 0.25rem 0;
       }
 
       button {
-        font-size: 0.8rem;
+        font-size: 0.9rem;
         padding: 0.35rem 0.8rem;
         border-radius: 3px;
         border: 1px solid var(--border);
@@ -187,8 +188,8 @@
         }
 
         window.toggleTheme = function () {
-          var current = document.body.dataset.theme || "dark";
-          var next = current === "dark" ? "light" : "dark";
+          var current = document.body.dataset.theme || "light";
+          var next = current === "light" ? "dark" : "light";
           applyTheme(next);
         };
 
@@ -208,7 +209,8 @@
             storedTheme = null;
             storedSidebar = null;
           }
-          applyTheme(storedTheme === "light" ? "light" : "dark");
+          // Default to light theme if nothing stored.
+          applyTheme(storedTheme === "dark" ? "dark" : "light");
           applySidebar(storedSidebar === "closed" ? "closed" : "open");
         });
       })();
@@ -373,4 +375,3 @@
     </script>
   </body>
 </html>
-

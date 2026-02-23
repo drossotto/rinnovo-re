@@ -1,0 +1,41 @@
+{% set name = "rinnovo-daemon" %}
+{% set version = "0.1.0" %}
+
+package:
+  name: {{ name }}
+  version: {{ version }}
+
+source:
+  # Build directly from the monorepo root.
+  path: ../../
+
+build:
+  number: 0
+  script: bash ./conda/rinnovo-daemon/build.sh  # [unix]
+  script_win: call .\\conda\\rinnovo-daemon\\bld.bat  # [win]
+
+requirements:
+  host:
+    - rust
+    - cargo
+  run:
+    # The daemon itself has no hard runtime deps beyond libc.
+    - {{ pin_compatible('rust', max_pin='x.x') }}
+
+test:
+  commands:
+    # Verify the daemon binary is present and runnable in the env.
+    - rnb_daemon --help
+
+about:
+  home: "https://github.com/drossotto/rinnovo-re"
+  summary: "Rinnovo daemon for managing engines and registrar heartbeats."
+  license: "MIT"
+  license_family: "MIT"
+  dev_url: "https://github.com/drossotto/rinnovo-re"
+
+extra:
+  # This recipe is intended to be published to a private channel first,
+  # e.g. `conda install -c rinnovo rinnovo-daemon`.
+  recipe-maintainers:
+    - "Davide Rossotto <rinnovo.hardware@gmail.com>"

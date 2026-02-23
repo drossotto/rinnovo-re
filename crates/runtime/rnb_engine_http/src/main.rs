@@ -215,23 +215,49 @@ async fn spawn_registrar_task() {
 
 #[tokio::main]
 async fn main() {
+    use std::env;
+
     let app = build_router();
 
-    // For now bind to 0.0.0.0:8787 to match earlier design sketches.
-    let addr: SocketAddr = "0.0.0.0:8787".parse().expect("valid socket addr");
-    println!("rnb_engine_http listening on {}", addr);
+    // Allow the engine port to be configured via environment, with a stable
+    // default and a simple failover if the chosen port is unavailable.
+    let default_port: u16 = 8787;
+    let requested_port = env::var("RINNOVO_ENGINE_PORT")
+        .ok()
+        .and_then(|raw| raw.parse::<u16>().ok());
+
+    let primary_addr: SocketAddr = SocketAddr::from(([0, 0, 0, 0], requested_port.unwrap_or(default_port)));
+
+    // First try the requested/default port. If it's already in use or we
+    // fail to bind for some other reason, fall back to an OS-assigned
+    // ephemeral port so the engine can still come up.
+    let listener = match tokio::net::TcpListener::bind(primary_addr).await {
+        Ok(l) => l,
+        Err(err) => {
+            eprintln!(
+                "rnb_engine_http: failed to bind {}; falling back to ephemeral port: {err}",
+                primary_addr
+            );
+            tokio::net::TcpListener::bind("0.0.0.0:0")
+                .await
+                .expect("bind fallback http listener")
+        }
+    };
+
+    let bound_addr = listener.local_addr().expect("discover bound socket addr");
+    println!("rnb_engine_http listening on {}", bound_addr);
 
     // Optionally register with a registrar if configured via env vars.
+    //
+    // Note: RINNOVO_ENGINE_ENDPOINT_URL may differ from the bound_addr if the
+    // engine is running behind a reverse proxy or is intended to be reached
+    // via a different host/port. The daemon will be responsible for keeping
+    // those in sync in managed deployments.
     spawn_registrar_task().await;
 
-    axum::serve(
-        tokio::net::TcpListener::bind(addr)
-            .await
-            .expect("bind http listener"),
-        app,
-    )
-    .await
-    .expect("run axum server");
+    axum::serve(listener, app)
+        .await
+        .expect("run axum server");
 }
 
 #[cfg(test)]

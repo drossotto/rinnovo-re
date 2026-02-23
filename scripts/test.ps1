@@ -40,3 +40,24 @@ if ([string]::IsNullOrWhiteSpace($registrarUrl)) {
     Write-Host "Pinging console session at $registrarUrl/v1/console/session"
     curl "$registrarUrl/v1/console/session"
 }
+
+Write-Host "== Conda daemon package build (optional) =="
+$conda = Get-Command conda -ErrorAction SilentlyContinue
+if ($null -eq $conda) {
+    Write-Host "conda not found; skipping Conda daemon integration test."
+} else {
+    Write-Host "Building rinnovo-daemon Conda package (this may take a while)..."
+    conda build conda/rinnovo-daemon
+}
+
+Write-Host "== Docker daemon image build (optional) =="
+$docker = Get-Command docker -ErrorAction SilentlyContinue
+if ($null -eq $docker) {
+    Write-Host "docker not found; skipping Docker daemon integration test."
+} else {
+    Write-Host "Building daemon + engine image from docker/daemon.Dockerfile..."
+    docker build -f docker/daemon.Dockerfile -t rinnovo-daemon-test .
+
+    Write-Host "Running Docker daemon smoke test..."
+    docker run --rm rinnovo-daemon-test
+}
