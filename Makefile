@@ -17,6 +17,10 @@ test-docs:
 	@echo "Compiling LaTeX spec..."
 	$(MAKE) compile-latex-doc
 
+dev-web:
+	@echo "Starting live-server for web (requires npm live-server)"
+	cd web && live-server
+
 test-all:
 	$(MAKE) run-common-tests
 	$(MAKE) test-docs

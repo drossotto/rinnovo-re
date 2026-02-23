@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Rinnovo Representation Engine Console</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0b1020;
+        --bg-alt: #111629;
+        --border: #262b3c;
+        --text: #f4f5f7;
+        --muted: #9ca3c7;
+        --accent: #2563eb;
+      }
+
+      body[data-theme="light"] {
+        --bg: #f4f4f7;
+        --bg-alt: #ffffff;
+        --border: #d0d4e0;
+        --text: #111827;
+        --muted: #6b7280;
+        --accent: #1d4ed8;
+      }
+
+      body {
+        font-family: "Roboto Slab", system-ui, -apple-system,
+          BlinkMacSystemFont, "Segoe UI", sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: var(--bg);
+        color: var(--text);
+      }
+
+      header {
+        padding: 0.75rem 1.5rem;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg-alt);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+      }
+
+      .header-left {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+
+      .title-block h1 {
+        margin: 0;
+        font-size: 1.1rem;
+      }
+
+      .title-block p {
+        margin: 0.2rem 0 0;
+        font-size: 0.8rem;
+        color: var(--muted);
+      }
+
+      .layout {
+        display: flex;
+        padding: 1.5rem;
+        box-sizing: border-box;
+        gap: 1.25rem;
+      }
+
+      aside {
+        width: 220px;
+        min-width: 200px;
+        border-radius: 4px;
+        border: 1px solid var(--border);
+        background: var(--bg-alt);
+        padding: 0.75rem 0.85rem;
+        box-sizing: border-box;
+        font-size: 0.85rem;
+      }
+
+      main {
+        flex: 1;
+      }
+
+      body[data-sidebar="closed"] aside {
+        display: none;
+      }
+
+      .sidebar-section {
+        margin-bottom: 0.75rem;
+      }
+
+      .sidebar-section h2 {
+        font-size: 0.8rem;
+        margin: 0 0 0.3rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: var(--muted);
+      }
+
+      .sidebar-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+
+      .sidebar-list li {
+        margin: 0.15rem 0;
+      }
+
+      .sidebar-list span {
+        color: var(--muted);
+      }
+
+      .panel {
+        border-radius: 4px;
+        border: 1px solid var(--border);
+        padding: 0.9rem 1rem;
+        background: var(--bg-alt);
+        margin-bottom: 1rem;
+      }
+
+      h2 {
+        margin: 0 0 0.5rem;
+        font-size: 0.95rem;
+      }
+
+      p {
+        font-size: 0.85rem;
+        margin: 0.25rem 0;
+      }
+
+      button {
+        font-size: 0.8rem;
+        padding: 0.35rem 0.8rem;
+        border-radius: 3px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--text);
+        cursor: pointer;
+      }
+
+      #sidebar-toggle {
+        font-size: 1rem;
+        padding: 0.25rem 0.6rem;
+      }
+
+      button:hover {
+        border-color: var(--accent);
+      }
+    </style>
+    <script>
+      (function () {
+        function applyTheme(theme) {
+          document.body.dataset.theme = theme;
+          try {
+            localStorage.setItem("rinnovo-theme", theme);
+          } catch (_) {
+            // ignore storage errors
+          }
+        }
+
+        function applySidebar(state) {
+          document.body.dataset.sidebar = state;
+          try {
+            localStorage.setItem("rinnovo-sidebar", state);
+          } catch (_) {
+            // ignore storage errors
+          }
+          var btn = document.getElementById("sidebar-toggle");
+          if (btn) {
+            btn.textContent = state === "open" ? "✕" : "☰";
+          }
+        }
+
+        window.toggleTheme = function () {
+          var current = document.body.dataset.theme || "dark";
+          var next = current === "dark" ? "light" : "dark";
+          applyTheme(next);
+        };
+
+        window.toggleSidebar = function () {
+          var current = document.body.dataset.sidebar || "open";
+          var next = current === "open" ? "closed" : "open";
+          applySidebar(next);
+        };
+
+        document.addEventListener("DOMContentLoaded", function () {
+          var storedTheme = null;
+          var storedSidebar = null;
+          try {
+            storedTheme = localStorage.getItem("rinnovo-theme");
+            storedSidebar = localStorage.getItem("rinnovo-sidebar");
+          } catch (_) {
+            storedTheme = null;
+            storedSidebar = null;
+          }
+          applyTheme(storedTheme === "light" ? "light" : "dark");
+          applySidebar(storedSidebar === "closed" ? "closed" : "open");
+        });
+      })();
+    </script>
+  </head>
+  <body>
+    <header>
+      <div class="header-left">
+        <button
+          id="sidebar-toggle"
+          type="button"
+          onclick="toggleSidebar()"
+          aria-label="Toggle sidebar"
+        >
+          ☰
+        </button>
+        <div class="title-block">
+          <h1>Rinnovo Representation Engine</h1>
+          <p>Console</p>
+        </div>
+      </div>
+      <button type="button" onclick="toggleTheme()">Theme</button>
+    </header>
+    <div class="layout">
+      <aside>
+        <div class="sidebar-section">
+          <h2>Server</h2>
+          <p style="margin: 0.15rem 0 0.35rem;">
+            <span>local (placeholder)</span>
+          </p>
+        </div>
+        <div class="sidebar-section">
+          <h2>Workspaces</h2>
+          <ul class="sidebar-list">
+            <li><span>No workspaces yet.</span></li>
+          </ul>
+        </div>
+        <div class="sidebar-section">
+          <h2>Artifacts</h2>
+          <ul class="sidebar-list">
+            <li><span>No artifacts yet.</span></li>
+          </ul>
+        </div>
+      </aside>
+      <main>
+        <section id="workspace" class="panel">
+          <h2>Workspace</h2>
+          <p>
+            Primary entry point for opening and managing artifacts or
+            workspaces. This stays deliberately simple until the engine HTTP
+            API is ready.
+          </p>
+        </section>
+
+        <section id="objects" class="panel">
+          <h2>Objects</h2>
+          <p>
+            Logical objects (cells, genes, samples, clusters) from the active
+            workspace will be listed here once the HTTP API is wired.
+          </p>
+        </section>
+
+        <section id="views" class="panel">
+          <h2>Views</h2>
+          <p>
+            Biological views on top of the virtualization layer (cells(),
+            genes, BGCs, etc.) will appear here as the core engine evolves.
+          </p>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
+

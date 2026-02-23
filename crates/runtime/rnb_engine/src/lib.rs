@@ -2,9 +2,11 @@ use std::path::Path;
 
 pub mod artifact;
 pub mod object;
+pub mod bio;
 
 pub use artifact::Artifact;
 pub use object::Object;
+pub use bio::BioView;
 
 pub use rnb_format::{
     AttributeRecord,

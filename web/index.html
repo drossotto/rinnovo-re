@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Rinnovo Representation Engine</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+      }
+
+      body {
+        background: #020617;
+        color: #e5e7eb;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+      }
+
+      rinnovo-root {
+        display: block;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <rinnovo-root></rinnovo-root>
+    <script>
+      (function () {
+        class RinnovoRoot extends HTMLElement {
+          constructor() {
+            super();
+            this.attachShadow({ mode: "open" });
+            this._route = this._route.bind(this);
+          }
+
+          connectedCallback() {
+            window.addEventListener("hashchange", this._route);
+            this._route();
+          }
+
+          disconnectedCallback() {
+            window.removeEventListener("hashchange", this._route);
+          }
+
+          _route() {
+            const hash = window.location.hash || "#landing";
+            const page =
+              hash === "#console" ? "pages/console.html" : "pages/landing.html";
+            this._renderFrame(page);
+          }
+
+          _renderFrame(src) {
+            this.shadowRoot.innerHTML = `
+              <style>
+                :host {
+                  display: block;
+                  height: 100%;
+                }
+                iframe {
+                  border: 0;
+                  width: 100%;
+                  height: 100vh;
+                }
+              </style>
+              <iframe src="${src}" title="Rinnovo"></iframe>
+            `;
+          }
+        }
+
+        customElements.define("rinnovo-root", RinnovoRoot);
+      })();
+    </script>
+  </body>
+</html>
+
