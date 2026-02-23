@@ -71,4 +71,48 @@ impl Artifact {
     pub fn numeric_matrix(&self) -> Option<&NumericMatrix> {
         self.inner.numeric_matrix.as_ref()
     }
+
+    /// Return all attribute records attached to the given `object_id`.
+    ///
+    /// The result is empty if there is no AttributeTable segment or
+    /// if the object has no attributes.
+    pub fn attributes_for_object(
+        &self,
+        object_id: u32,
+    ) -> Option<impl Iterator<Item = &crate::AttributeRecord>> {
+        let table = self.attribute_table()?;
+        Some(table.attributes.iter().filter(move |a| a.object_id == object_id))
+    }
+
+    /// Return all relations originating from the given `src_id`.
+    ///
+    /// If `rel_type_sid` is `Some`, the results are further filtered
+    /// to only that relation type.
+    pub fn relations_from(
+        &self,
+        src_id: u32,
+        rel_type_sid: Option<u32>,
+    ) -> Option<impl Iterator<Item = &crate::RelationRecord>> {
+        let table = self.relation_table()?;
+        Some(table.relations.iter().filter(move |r| {
+            r.src_id == src_id
+                && rel_type_sid.map(|sid| r.rel_type_sid == sid).unwrap_or(true)
+        }))
+    }
+
+    /// Return all relations targeting the given `dst_id`.
+    ///
+    /// If `rel_type_sid` is `Some`, the results are further filtered
+    /// to only that relation type.
+    pub fn relations_to(
+        &self,
+        dst_id: u32,
+        rel_type_sid: Option<u32>,
+    ) -> Option<impl Iterator<Item = &crate::RelationRecord>> {
+        let table = self.relation_table()?;
+        Some(table.relations.iter().filter(move |r| {
+            r.dst_id == dst_id
+                && rel_type_sid.map(|sid| r.rel_type_sid == sid).unwrap_or(true)
+        }))
+    }
 }

@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Install Rinnovo RE</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="../app/vendor/htmx.min.js"></script>
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        background: #f9fafb;
+        color: #111827;
+      }
+
+      .page {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      header {
+        padding: 0.85rem 1.5rem;
+        border-bottom: 1px solid #e5e7eb;
+        background: #ffffff;
+      }
+
+      .header-inner {
+        max-width: 1120px;
+        margin: 0 auto;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      .header-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+      }
+
+      main {
+        flex: 1;
+        padding: 2.5rem 1.5rem 3rem;
+      }
+
+      .content {
+        max-width: 840px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        font-size: 1.6rem;
+        margin-bottom: 0.75rem;
+      }
+
+      p {
+        margin: 0.4rem 0;
+        font-size: 0.9rem;
+        color: #4b5563;
+      }
+
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+        font-size: 0.85rem;
+        background: #111827;
+        color: #e5e7eb;
+        padding: 0.35rem 0.55rem;
+        border-radius: 0.25rem;
+      }
+
+      pre {
+        background: #111827;
+        color: #e5e7eb;
+        padding: 0.75rem 0.9rem;
+        border-radius: 0.35rem;
+        font-size: 0.85rem;
+        overflow-x: auto;
+      }
+
+      .install-step {
+        margin-top: 1.5rem;
+      }
+
+      .install-step h2 {
+        font-size: 1rem;
+        margin-bottom: 0.2rem;
+      }
+
+      .install-step ol {
+        margin: 0.5rem 0 0;
+        padding-left: 1.25rem;
+        font-size: 0.9rem;
+        color: #4b5563;
+      }
+
+      .install-step li {
+        margin: 0.25rem 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header>
+        <div class="header-inner">
+          <div class="header-title">Rinnovo Engine Install</div>
+          <a href="/#landing" target="_top" style="font-size:0.85rem; text-decoration:none; color:#6b7280;">
+            ← Back to overview
+          </a>
+        </div>
+      </header>
+      <main>
+        <div class="content">
+          <h1>Install a local Rinnovo engine</h1>
+          <p>
+            The Rinnovo engine runs next to your data and exposes a small HTTP
+            API that the console connects to. This page describes a simple
+            development setup using the open-source repository.
+          </p>
+
+          <div class="install-step">
+            <h2>1. Clone the repository</h2>
+            <p>In a terminal with Rust and Cargo installed:</p>
+            <pre>git clone https://github.com/drossotto/rinnovo-re.git
+cd rinnovo-re</pre>
+          </div>
+
+          <div class="install-step">
+            <h2>2. Run the engine HTTP service</h2>
+            <p>
+              Build and run the Axum-based HTTP wrapper around the engine
+              runtime:
+            </p>
+            <pre>cargo run -p rnb_engine_http</pre>
+            <p>
+              By default this listens on <code>http://127.0.0.1:8787</code>.
+            </p>
+          </div>
+
+          <div class="install-step">
+            <h2>3. (Optional) Register with a registrar</h2>
+            <p>
+              Once a registrar service is running, the engine will be able to
+              register itself using an environment variable:
+            </p>
+            <pre>export RINNOVO_REGISTRAR_URL=&lt;https://rinnovo-registrar.example.com&gt;</pre>
+            <p>
+              The console can then discover your engine and workspace via the
+              registrar instead of hard-coding URLs.
+            </p>
+          </div>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>
+

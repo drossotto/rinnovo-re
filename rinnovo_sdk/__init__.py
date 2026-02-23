@@ -6,6 +6,6 @@ providing a more idiomatic Python interface.
 """
 
 from .artifact import Artifact
+from .bio import BioView
 
-__all__ = ["Artifact"]
-
+__all__ = ["Artifact", "BioView"]

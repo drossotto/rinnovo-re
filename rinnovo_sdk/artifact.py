@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Optional, Union
+from typing import Dict, Iterable, List, Optional, Union
 
 import rinnovo
 
@@ -49,6 +49,25 @@ class Artifact:
         """Check if a given SegmentType (by numeric id) is required."""
         return segment_type_id in self._inner.manifest.required_segments
 
+    # --- String dictionary helpers --------------------------------------------
+
+    def strings(self) -> List[str]:
+        """
+        Return the underlying StringDict as a list of strings.
+
+        If the artifact has no StringDict segment, returns an empty list.
+        """
+        # Use the in-memory artifact held by the bindings.
+        return list(self._inner.list_strings())
+
+    def string_index(self) -> Dict[str, int]:
+        """
+        Return a mapping from string label to its SID.
+
+        This is derived from `strings()`, using the list index as the SID.
+        """
+        return {s: i for i, s in enumerate(self.strings())}
+
     # --- Virtual object helpers -------------------------------------------------
 
     def get_object(self, object_id: int) -> Optional[object]:
@@ -57,7 +76,7 @@ class Artifact:
 
         Returns a `rinnovo.Object` instance or None.
         """
-        return rinnovo.get_object(str(self.path), int(object_id))
+        return self._inner.get_object(int(object_id))
 
     def objects_by_type(self, type_sid: int) -> List[object]:
         """
@@ -65,4 +84,33 @@ class Artifact:
 
         The elements are `rinnovo.Object` instances.
         """
-        return list(rinnovo.objects_by_type(str(self.path), int(type_sid)))
+        return list(self._inner.objects_by_type(int(type_sid)))
+
+    # --- Attribute and relation helpers ----------------------------------------
+
+    def attributes(self, object_id: int) -> List[tuple[int, int, int, int]]:
+        """
+        Return all attribute records attached to the given object.
+
+        Each element is a tuple ``(object_id, key_sid, value_sid, flags)``.
+        """
+        return list(self._inner.list_attributes(int(object_id)))
+
+    def relations(
+        self,
+        src_id: int | None = None,
+        dst_id: int | None = None,
+        rel_type_sid: int | None = None,
+    ) -> List[tuple[int, int, int, int]]:
+        """
+        Return relation records filtered by source, destination, and type.
+
+        Each element is a tuple ``(src_id, dst_id, rel_type_sid, flags)``.
+        """
+        return list(
+            self._inner.list_relations(
+                None if src_id is None else int(src_id),
+                None if dst_id is None else int(dst_id),
+                None if rel_type_sid is None else int(rel_type_sid),
+            )
+        )

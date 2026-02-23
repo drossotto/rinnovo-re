@@ -6,6 +6,7 @@ members = [
   "crates/kernel/rnb_store",
   "crates/kernel/rnb_index",
   "crates/runtime/rnb_engine",
+  "crates/runtime/rnb_engine_http",
   "crates/tools/rnb_build",
   "crates/bindings/rnb_py",
 ]
