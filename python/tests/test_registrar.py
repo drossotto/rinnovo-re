@@ -2,16 +2,10 @@ from __future__ import annotations
 
 from python.registrar.app import (
     app,
-    ENGINES,
     DEFAULT_PROFILE_ID,
     DEFAULT_WORKSPACE_ID,
 )
 from fastapi.testclient import TestClient
-
-
-def setup_function() -> None:
-    # Ensure tests are isolated.
-    ENGINES.clear()
 
 
 def test_register_engine_heartbeat_and_session_flow() -> None:
