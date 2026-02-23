@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use axum::{
     extract::Query,
@@ -125,6 +126,93 @@ fn build_router() -> Router {
         .route("/engine/v1/artifact/bio/genes", get(bio_genes))
 }
 
+#[derive(Serialize)]
+struct EngineRegisterPayload<'a> {
+    profile_token: Option<&'a str>,
+    name: &'a str,
+    kind: &'a str,
+    endpoint_url: &'a str,
+    version: &'a str,
+    capabilities: Vec<&'a str>,
+}
+
+#[derive(Deserialize)]
+struct EngineRegisterResponse {
+    engine_id: String,
+    heartbeat_token: String,
+}
+
+async fn spawn_registrar_task() {
+    use std::env;
+
+    let registrar_url = match env::var("RINNOVO_REGISTRAR_URL") {
+        Ok(v) if !v.trim().is_empty() => v.trim_end_matches('/').to_string(),
+        _ => return, // no registrar configured; nothing to do
+    };
+
+    let endpoint_url = match env::var("RINNOVO_ENGINE_ENDPOINT_URL") {
+        Ok(v) if !v.trim().is_empty() => v,
+        _ => return, // endpoint URL is required to register
+    };
+
+    let name = env::var("RINNOVO_ENGINE_NAME").unwrap_or_else(|_| "local-dev".to_string());
+    let kind = env::var("RINNOVO_ENGINE_KIND").unwrap_or_else(|_| "local".to_string());
+    let profile_token = env::var("RINNOVO_PROFILE_TOKEN").ok();
+
+    tokio::spawn(async move {
+        let client = reqwest::Client::new();
+
+        // Initial registration
+        let payload = EngineRegisterPayload {
+            profile_token: profile_token.as_deref(),
+            name: &name,
+            kind: &kind,
+            endpoint_url: &endpoint_url,
+            version: env!("CARGO_PKG_VERSION"),
+            capabilities: vec!["rnb:v1", "http:v1"],
+        };
+
+        let register_url = format!("{}/v1/engines/register", registrar_url);
+        let resp = client.post(&register_url).json(&payload).send().await;
+        let Ok(resp) = resp else {
+            eprintln!("engine_http: failed to call registrar at {}: {:?}", register_url, resp);
+            return;
+        };
+        if !resp.status().is_success() {
+            eprintln!(
+                "engine_http: registrar registration failed: HTTP {}",
+                resp.status()
+            );
+            return;
+        }
+
+        let Ok(body) = resp.json::<EngineRegisterResponse>().await else {
+            eprintln!("engine_http: failed to parse registrar registration response");
+            return;
+        };
+
+        let engine_id = body.engine_id;
+        let heartbeat_token = body.heartbeat_token;
+
+        // Heartbeat loop
+        let heartbeat_url = format!("{}/v1/engines/{}/heartbeat", registrar_url, engine_id);
+        loop {
+            let res = client
+                .post(&heartbeat_url)
+                .header("X-Engine-Token", &heartbeat_token)
+                .json(&serde_json::json!({"status": "online"}))
+                .send()
+                .await;
+
+            if let Err(e) = res {
+                eprintln!("engine_http: heartbeat error: {:?}", e);
+            }
+
+            tokio::time::sleep(Duration::from_secs(30)).await;
+        }
+    });
+}
+
 #[tokio::main]
 async fn main() {
     let app = build_router();
@@ -132,6 +220,10 @@ async fn main() {
     // For now bind to 0.0.0.0:8787 to match earlier design sketches.
     let addr: SocketAddr = "0.0.0.0:8787".parse().expect("valid socket addr");
     println!("rnb_engine_http listening on {}", addr);
+
+    // Optionally register with a registrar if configured via env vars.
+    spawn_registrar_task().await;
+
     axum::serve(
         tokio::net::TcpListener::bind(addr)
             .await

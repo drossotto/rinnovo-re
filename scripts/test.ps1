@@ -20,6 +20,9 @@ if (Test-Path ".env") {
     }
 }
 
+Write-Host "== Install Python dev requirements =="
+python -m pip install -r requirements-dev.txt
+
 Write-Host "== Rust tests =="
 cargo test
 

@@ -7,5 +7,6 @@ providing a more idiomatic Python interface.
 
 from .artifact import Artifact
 from .bio import BioView
+from .registrar_client import ProfileSummary, WorkspaceSummary, login, list_workspaces
 
-__all__ = ["Artifact", "BioView"]
+__all__ = ["Artifact", "BioView", "ProfileSummary", "WorkspaceSummary", "login", "list_workspaces"]

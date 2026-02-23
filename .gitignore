@@ -6,6 +6,7 @@ docs/latex/build/
 *.synctex.gz
 .env
 
+registrar.db
 
 # Python virtual env and cache
 .venv/

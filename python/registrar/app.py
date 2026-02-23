@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import (
     JSON,
@@ -20,6 +21,27 @@ from sqlalchemy.orm import Session, declarative_base, relationship, sessionmaker
 
 
 app = FastAPI(title="Rinnovo Registrar", version="0.1.0")
+
+# --- CORS configuration ------------------------------------------------------
+
+_cors_origins_raw = os.getenv("CORS_ALLOW_ORIGINS")
+if _cors_origins_raw:
+    _cors_origins = [
+        origin.strip()
+        for origin in _cors_origins_raw.split(",")
+        if origin.strip()
+    ]
+else:
+    # Development-friendly default; tighten via CORS_ALLOW_ORIGINS in prod.
+    _cors_origins = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # --- Database setup -----------------------------------------------------------
@@ -209,8 +231,9 @@ def register_engine(
     """
     profile = ensure_default_profile_and_workspace(db)
 
-    # Simple deterministic ID; fine for dev and testing.
-    engine_id = f"eng_{int(datetime.now(timezone.utc).timestamp())}"
+    # Random ID to avoid collisions when multiple engines register within
+    # the same second (e.g. in tests or rapid restarts).
+    engine_id = f"eng_{secrets.token_hex(8)}"
     heartbeat_token = secrets.token_hex(16)
 
     inst = Engine(
@@ -279,6 +302,23 @@ def list_engines(profile_id: str, db: Session = Depends(get_db)) -> List[EngineI
     engines = db.execute(stmt).scalars().all()
 
     return [engine_to_info(e) for e in engines]
+
+
+@app.get("/v1/profiles/{profile_id}/workspaces", response_model=List[WorkspaceInfo])
+def list_workspaces(
+    profile_id: str,
+    db: Session = Depends(get_db),
+) -> List[WorkspaceInfo]:
+    profile = db.get(Profile, profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="profile not found")
+
+    stmt = select(Workspace).where(Workspace.profile_id == profile_id)
+    workspaces = db.execute(stmt).scalars().all()
+
+    return [
+        WorkspaceInfo(id=w.id, name=w.name, engine_id=w.engine_id) for w in workspaces
+    ]
 
 
 @app.get("/v1/console/session", response_model=ConsoleSessionResponse)

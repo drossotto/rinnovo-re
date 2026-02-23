@@ -236,14 +236,17 @@
       <aside>
         <div class="sidebar-section">
           <h2>Server</h2>
-          <p style="margin: 0.15rem 0 0.35rem;">
-            <span>local (placeholder)</span>
+          <p id="sidebar-profile" style="margin: 0.15rem 0 0.15rem;">
+            <span>Profile: loading…</span>
+          </p>
+          <p id="sidebar-engine" style="margin: 0 0 0.35rem;">
+            <span>Engine: waiting for registrar</span>
           </p>
         </div>
         <div class="sidebar-section">
           <h2>Workspaces</h2>
-          <ul class="sidebar-list">
-            <li><span>No workspaces yet.</span></li>
+          <ul class="sidebar-list" id="sidebar-workspaces">
+            <li><span>Loading workspaces…</span></li>
           </ul>
         </div>
         <div class="sidebar-section">
@@ -280,5 +283,94 @@
         </section>
       </main>
     </div>
+    <script>
+      (function () {
+        function registrarBaseUrl() {
+          // Allow an override (e.g. injected by hosting environment).
+          var fromWindow = window.RINNOVO_REGISTRAR_URL;
+          if (typeof fromWindow === "string" && fromWindow.trim() !== "") {
+            return fromWindow.replace(/\/+$/, "");
+          }
+          // Default to the public Render deployment for now.
+          return "https://rinnovo-re.onrender.com";
+        }
+
+        function setSidebarError(message) {
+          var profileEl = document.getElementById("sidebar-profile");
+          var engineEl = document.getElementById("sidebar-engine");
+          var wsList = document.getElementById("sidebar-workspaces");
+
+          if (profileEl) {
+            profileEl.textContent = "Profile: offline";
+          }
+          if (engineEl) {
+            engineEl.textContent = "Engine: " + message;
+          }
+          if (wsList) {
+            wsList.innerHTML = "";
+            var li = document.createElement("li");
+            li.textContent = "Unable to load workspaces.";
+            wsList.appendChild(li);
+          }
+        }
+
+        async function loadConsoleSession() {
+          var base = registrarBaseUrl();
+          var url = base + "/v1/console/session";
+
+          var profileEl = document.getElementById("sidebar-profile");
+          var engineEl = document.getElementById("sidebar-engine");
+          var wsList = document.getElementById("sidebar-workspaces");
+
+          try {
+            var resp = await fetch(url, { method: "GET" });
+            if (!resp.ok) {
+              throw new Error("HTTP " + resp.status);
+            }
+            var data = await resp.json();
+
+            if (profileEl && data.profile) {
+              profileEl.textContent =
+                "Profile: " + data.profile.name + " (" + data.profile.id + ")";
+            }
+
+            if (engineEl) {
+              if (data.engine) {
+                engineEl.textContent =
+                  "Engine: " +
+                  data.engine.name +
+                  " • " +
+                  (data.engine.status || "unknown") +
+                  " • " +
+                  data.engine.endpoint_url;
+              } else {
+                engineEl.textContent = "Engine: none registered";
+              }
+            }
+
+            if (wsList) {
+              wsList.innerHTML = "";
+              if (data.workspace) {
+                var li = document.createElement("li");
+                li.textContent =
+                  data.workspace.name + " (" + data.workspace.id + ")";
+                wsList.appendChild(li);
+              } else {
+                var liEmpty = document.createElement("li");
+                liEmpty.textContent = "No workspaces available.";
+                wsList.appendChild(liEmpty);
+              }
+            }
+          } catch (err) {
+            setSidebarError(String(err));
+          }
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+          loadConsoleSession();
+        });
+      })();
+    </script>
   </body>
 </html>
+
