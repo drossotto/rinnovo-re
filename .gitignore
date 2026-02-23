@@ -4,6 +4,7 @@ docs/latex/build/
 *.out
 *.toc
 *.synctex.gz
+.env
 
 
 # Python virtual env and cache
