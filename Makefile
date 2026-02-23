@@ -19,7 +19,7 @@ test-docs:
 
 dev-web:
 	@echo "Starting live-server for web (requires npm live-server)"
-	cd web && live-server
+	cd web && live-server --port=9017
 
 test-all:
 	$(MAKE) run-common-tests

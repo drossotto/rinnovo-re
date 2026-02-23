@@ -163,6 +163,14 @@
           } catch (_) {
             // ignore storage errors
           }
+          try {
+            window.parent.postMessage(
+              { type: "rinnovo-theme", theme: theme },
+              "*"
+            );
+          } catch (_) {
+            // ignore cross-window errors
+          }
         }
 
         function applySidebar(state) {
@@ -274,4 +282,3 @@
     </div>
   </body>
 </html>
-
