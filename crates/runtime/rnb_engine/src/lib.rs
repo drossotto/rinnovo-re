@@ -3,14 +3,18 @@ use std::path::Path;
 pub mod artifact;
 pub mod object;
 pub mod bio;
+pub mod projection;
 
 pub use artifact::Artifact;
 pub use object::Object;
 pub use bio::BioView;
+pub use projection::{PathSpec, SemiringKind, SparseBlock};
 
 pub use rnb_format::{
     AttributeRecord,
     AttributeTable,
+    ConstraintDef,
+    EdgeTypeDef,
     Manifest,
     NumericMatrix,
     NumericType,
@@ -24,7 +28,11 @@ pub use rnb_format::{
     RnbFile,
     RnbHeader,
     SegmentType,
+    SparseMatrix,
+    SparseStorage,
     StringDict,
+    TypeRegistry,
+    NodeTypeDef,
 };
 
 /// Write a minimal RNB artifact to the given path.

@@ -4,6 +4,9 @@
 \usepackage{lmodern}
 \usepackage{amsmath,amssymb}
 \usepackage{hyperref}
+\usepackage{geometry}
+
+\geometry{margin=1in}
 
 \title{Rinnovo Binary (RNB): Artifact Format and Runtime}
 \author{}
@@ -227,5 +230,203 @@ This separation between on-disk segments and the logical object view
 allows the physical layout to evolve (for example, using columnar
 storage or indices) without changing the semantics seen by callers of
 the runtime.
+
+\section{Invariant-Aware Typed Graph Kernel and Path-Constrained Projection}
+
+\subsection{Design Principles}
+
+The Representation Engine (RE) is designed as a constraint-aware, typed, relational substrate for biological data. Unlike matrix-first frameworks that treat sparse matrices as the primary object, RE models biological systems as a typed multigraph with explicit invariants and derives matrix views through path-constrained projection. 
+
+The implementation is organized into three layers:
+
+\begin{enumerate}
+    \item \textbf{Format layer} (\texttt{rnb\_format}): physical segment types and on-disk layout.
+    \item \textbf{Runtime layer} (\texttt{rnb\_engine}): invariant validation and relational kernels.
+    \item \textbf{Projection layer}: sparse path-constrained block computation.
+\end{enumerate}
+
+This separation ensures that biological invariants are enforced independently of query logic and that derived numerical views are reproducible and semantically explicit.
+
+\subsection{Typed Graph Substrate}
+
+\subsubsection{Type Registry}
+
+We introduce a \texttt{TypeRegistrySegment} that defines the canonical schema:
+
+\begin{itemize}
+    \item Node types $\mathcal{T}_V$
+    \item Edge types $\mathcal{T}_E$
+    \item Declared source and destination types for each edge
+    \item Optional structural constraints
+\end{itemize}
+
+Formally, the artifact encodes a typed multigraph:
+
+\[
+G = (V, E, \tau_V, \tau_E)
+\]
+
+where:
+\begin{itemize}
+    \item $V$ is the set of nodes (objects),
+    \item $E \subseteq V \times V$ is the set of relations,
+    \item $\tau_V : V \to \mathcal{T}_V$ assigns node types,
+    \item $\tau_E : E \to \mathcal{T}_E$ assigns edge types.
+\end{itemize}
+
+For each edge type $t \in \mathcal{T}_E$, the registry declares:
+
+\[
+S(t), D(t) \in \mathcal{T}_V
+\]
+
+such that every edge $(u,v)$ of type $t$ must satisfy:
+
+\[
+\tau_V(u) = S(t), \quad \tau_V(v) = D(t).
+\]
+
+\subsubsection{Invariant Validation}
+
+At runtime, the artifact validates:
+
+\begin{enumerate}
+    \item Type adjacency correctness,
+    \item Existence of referenced objects,
+    \item (Optionally) structural parent constraints.
+\end{enumerate}
+
+Validation occurs at artifact load and (in future versions) at write-time commit. Artifacts lacking a \texttt{TypeRegistrySegment} remain backward-compatible but skip invariant enforcement.
+
+\subsection{Sparse Matrix Primitive}
+
+Although the graph is primary, numerical projections are supported through a \texttt{SparseMatrixSegment} implementing CSR/CSC storage:
+
+\begin{itemize}
+    \item \texttt{indptr} $\in \mathbb{N}^{n+1}$
+    \item \texttt{indices} $\in \mathbb{N}^{\text{nnz}}$
+    \item \texttt{data} $\in \mathbb{R}^{\text{nnz}}$
+\end{itemize}
+
+Each sparse matrix optionally binds to node-type axes, ensuring that rows and columns correspond to well-defined biological object sets.
+
+These matrices may represent:
+\begin{itemize}
+    \item Primary measurement tensors (e.g., counts),
+    \item Materialized projections derived from relational paths.
+\end{itemize}
+
+\subsection{Path-Constrained Projection Operator}
+
+\subsubsection{Path Specification}
+
+A \emph{PathSpec} is defined as a sequence of edge types:
+
+\[
+P = (t_1, t_2, \dots, t_k)
+\]
+
+where each $t_i \in \mathcal{T}_E$ and the destination type of $t_i$ matches the source type of $t_{i+1}$.
+
+Given source node set $S$ and target node set $T$, we compute:
+
+\[
+\Pi_P(S,T)
+\]
+
+which returns a sparse bipartite relation between $S$ and $T$.
+
+\subsubsection{Semiring-Based Composition}
+
+Projection is defined over a semiring $(\mathcal{W}, \oplus, \otimes)$.
+
+Examples include:
+
+\begin{itemize}
+    \item Boolean semiring:
+    \[
+    \oplus = \lor, \quad \otimes = \land
+    \]
+    \item Sum-product semiring:
+    \[
+    \oplus = +, \quad \otimes = \times
+    \]
+\end{itemize}
+
+The projection is algebraically:
+
+\[
+\Pi_P = A^{(t_1)} \otimes A^{(t_2)} \otimes \dots \otimes A^{(t_k)},
+\]
+
+where $A^{(t_i)}$ are sparse adjacency operators.
+
+\subsubsection{Algorithmic Implementation}
+
+Projection is implemented as iterative frontier expansion:
+
+\begin{enumerate}
+    \item Initialize frontier for each $u \in S$ with weight $1$.
+    \item For each edge type $t_i$:
+    \begin{itemize}
+        \item Expand neighbors using CSR adjacency.
+        \item Accumulate weights using $\otimes$ and $\oplus$.
+    \end{itemize}
+    \item Intersect final frontier with $T$.
+    \item Emit CSR row for $u$.
+\end{enumerate}
+
+Let $d_i$ denote average degree at step $i$. Worst-case complexity per source node is:
+
+\[
+O\left(\prod_{i=1}^{k} d_i \right).
+\]
+
+In biological graphs, $k$ is small and degrees are typically bounded, making sparse expansion tractable.
+
+\subsection{Bio-Level Views}
+
+\texttt{BioView} constructs semantic axes from node types (e.g., \texttt{cell}, \texttt{gene}). It resolves:
+
+\begin{itemize}
+    \item Node-type axes,
+    \item Path-based projections,
+    \item Sparse block extraction for downstream ML workflows.
+\end{itemize}
+
+Unlike matrix-first systems, axes are derived from typed object tables rather than inferred from matrix shape.
+
+\subsection{HTTP Kernel Surface}
+
+The engine exposes projection blocks over HTTP:
+
+\begin{verbatim}
+GET /engine/v1/project/block
+\end{verbatim}
+
+which returns:
+
+\begin{itemize}
+    \item Row IDs
+    \item Column IDs
+    \item CSR \texttt{indptr}
+    \item CSR \texttt{indices}
+    \item Weight data
+\end{itemize}
+
+This enables remote execution while preserving reproducible projection semantics.
+
+\subsection{Summary}
+
+The implemented kernel introduces:
+
+\begin{enumerate}
+    \item A typed biological multigraph substrate,
+    \item Invariant enforcement via schema registry,
+    \item A semiring-parametric sparse path projection operator,
+    \item Sparse matrix primitives as derived, versioned views.
+\end{enumerate}
+
+This architecture strictly generalizes matrix-centric representations by elevating relational structure to the primary computational object.
 
 \end{document}

@@ -9,6 +9,8 @@ mod object_table;
 mod attribute_table;
 mod relation_table;
 mod numeric_matrix;
+mod type_registry;
+mod sparse_matrix;
 
 pub use header::{RnbHeader, RNB_MAGIC, RNB_VERSION_MAJOR, RNB_VERSION_MINOR};
 pub use directory::{RnbDirectory, RnbDirEntry};
@@ -19,6 +21,8 @@ pub use object_table::{ObjectTable, ObjectRecord};
 pub use attribute_table::{AttributeTable, AttributeRecord};
 pub use relation_table::{RelationTable, RelationRecord};
 pub use numeric_matrix::{NumericMatrix, NumericType};
+pub use type_registry::{TypeRegistry, NodeTypeDef, EdgeTypeDef, ConstraintDef};
+pub use sparse_matrix::{SparseMatrix, SparseStorage};
 
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -33,7 +37,9 @@ pub struct RnbFile {
     pub object_table: Option<ObjectTable>,
     pub attribute_table: Option<AttributeTable>,
     pub relation_table: Option<RelationTable>,
+    pub type_registry: Option<TypeRegistry>,
     pub numeric_matrix: Option<NumericMatrix>,
+    pub sparse_matrix: Option<SparseMatrix>,
 }
 
 pub fn write_empty_rnb(path: impl AsRef<Path>) -> std::io::Result<()> {
@@ -250,6 +256,26 @@ pub fn open_rnb(path: impl AsRef<Path>) -> std::io::Result<RnbFile> {
         None
     };
 
+    // --- Read optional TypeRegistry ---
+    let tr_entry = directory
+        .entries
+        .iter()
+        .find(|e| e.segment_type == SegmentType::TypeRegistry.as_u32());
+
+    let type_registry = if let Some(e) = tr_entry {
+        let bytes = read_segment_bytes(&mut f, e)?;
+        let got = checksum64_fnv1a(&bytes);
+        if got != e.checksum64 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "type registry checksum mismatch",
+            ));
+        }
+        Some(TypeRegistry::read_from(&bytes[..])?)
+    } else {
+        None
+    };
+
     // --- Read optional NumericMatrix ---
     let num_entry = directory
         .entries
@@ -270,6 +296,26 @@ pub fn open_rnb(path: impl AsRef<Path>) -> std::io::Result<RnbFile> {
         None
     };
 
+    // --- Read optional SparseMatrix ---
+    let sparse_entry = directory
+        .entries
+        .iter()
+        .find(|e| e.segment_type == SegmentType::SparseMatrix.as_u32());
+
+    let sparse_matrix = if let Some(e) = sparse_entry {
+        let bytes = read_segment_bytes(&mut f, e)?;
+        let got = checksum64_fnv1a(&bytes);
+        if got != e.checksum64 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "sparse matrix checksum mismatch",
+            ));
+        }
+        Some(SparseMatrix::read_from(&bytes[..])?)
+    } else {
+        None
+    };
+
     Ok(RnbFile {
         header,
         directory,
@@ -278,7 +324,9 @@ pub fn open_rnb(path: impl AsRef<Path>) -> std::io::Result<RnbFile> {
         object_table,
         attribute_table,
         relation_table,
+        type_registry,
         numeric_matrix,
+        sparse_matrix,
     })
 }
 

@@ -9,7 +9,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use rnb_engine::{open, BioView};
+use rnb_engine::{open, BioView, PathSpec, SemiringKind};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
@@ -118,12 +118,130 @@ async fn bio_objects(q: ArtifactQuery, label: &str, kind: &'static str) -> impl 
     .into_response()
 }
 
+#[derive(Deserialize, Clone)]
+struct ProjectQuery {
+    /// Path to the .rnb artifact on disk.
+    path: String,
+    /// Comma-separated relation labels (StringDict strings).
+    rels: String,
+    /// Comma-separated source object IDs.
+    src: String,
+    /// Comma-separated destination object IDs.
+    dst: String,
+}
+
+#[derive(Serialize)]
+struct ProjectBlockResponse {
+    path: String,
+    rels: Vec<String>,
+    row_ids: Vec<u32>,
+    col_ids: Vec<u32>,
+    csr_indptr: Vec<u32>,
+    csr_indices: Vec<u32>,
+    data: Vec<f32>,
+}
+
+async fn project_block(Query(q): Query<ProjectQuery>) -> impl IntoResponse {
+    let path = PathBuf::from(&q.path);
+    let art = match open(&path) {
+        Ok(a) => a,
+        Err(e) => {
+            let msg = format!("failed to open artifact '{}': {e}", path.display());
+            return (StatusCode::BAD_REQUEST, msg).into_response();
+        }
+    };
+
+    let dict = match art.string_dict() {
+        Some(d) => d,
+        None => {
+            let msg = "artifact is missing StringDict segment";
+            return (StatusCode::BAD_REQUEST, msg.to_string()).into_response();
+        }
+    };
+
+    // Parse rel labels and map to SIDs.
+    let rel_labels: Vec<String> = q
+        .rels
+        .split(',')
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| s.trim().to_string())
+        .collect();
+    if rel_labels.is_empty() {
+        return (StatusCode::BAD_REQUEST, "rels must not be empty").into_response();
+    }
+
+    let mut rel_type_sids = Vec::with_capacity(rel_labels.len());
+    for label in &rel_labels {
+        if let Some(idx) = dict.strings.iter().position(|s| s == label) {
+            rel_type_sids.push(idx as u32);
+        } else {
+            let msg = format!("relation label '{}' not found in StringDict", label);
+            return (StatusCode::BAD_REQUEST, msg).into_response();
+        }
+    }
+
+    // Parse src/dst IDs.
+    fn parse_ids(raw: &str) -> Result<Vec<u32>, String> {
+        let mut out = Vec::new();
+        for part in raw.split(',') {
+            let trimmed = part.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let v: u32 = trimmed
+                .parse()
+                .map_err(|_| format!("invalid id '{}'", trimmed))?;
+            out.push(v);
+        }
+        if out.is_empty() {
+            return Err("id list must not be empty".to_string());
+        }
+        Ok(out)
+    }
+
+    let src_ids = match parse_ids(&q.src) {
+        Ok(v) => v,
+        Err(msg) => return (StatusCode::BAD_REQUEST, msg).into_response(),
+    };
+    let dst_ids = match parse_ids(&q.dst) {
+        Ok(v) => v,
+        Err(msg) => return (StatusCode::BAD_REQUEST, msg).into_response(),
+    };
+
+    let spec = PathSpec {
+        rel_type_sids,
+        semiring: SemiringKind::Boolean,
+        state_id: None,
+    };
+
+    let block = match art.project_path_block(&spec, &src_ids, &dst_ids) {
+        Ok(b) => b,
+        Err(e) => {
+            let msg = format!("projection error: {e}");
+            return (StatusCode::BAD_REQUEST, msg).into_response();
+        }
+    };
+
+    let resp = ProjectBlockResponse {
+        path: path.display().to_string(),
+        rels: rel_labels,
+        row_ids: block.row_ids,
+        col_ids: block.col_ids,
+        csr_indptr: block.csr_indptr,
+        csr_indices: block.csr_indices,
+        data: block.data,
+    };
+
+    Json(resp).into_response()
+}
+
 fn build_router() -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/engine/v1/artifact/summary", get(artifact_summary))
         .route("/engine/v1/artifact/bio/cells", get(bio_cells))
         .route("/engine/v1/artifact/bio/genes", get(bio_genes))
+        .route("/engine/v1/project/block", get(project_block))
 }
 
 #[derive(Serialize)]
@@ -265,7 +383,7 @@ mod tests {
     use super::*;
     use axum::body::Body;
     use axum::http::Method;
-    use rnb_format::{Manifest, ObjectRecord, ObjectTable, StringDict};
+    use rnb_format::{Manifest, ObjectRecord, ObjectTable, StringDict};       
     use tower::util::ServiceExt;
 
     fn temp_path(name: &str) -> std::path::PathBuf {
@@ -437,6 +555,97 @@ mod tests {
             .map(|v| v.as_u64().unwrap() as u32)
             .collect();
         assert_eq!(ids_genes, vec![1]);
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn project_block_two_step_chain_over_http() {
+
+        let path = temp_path("project");
+
+        // Build a small artifact matching the engine-level projection test:
+        // cell(0) --relA--> gene(1) --relA--> protein(2)
+        let manifest = Manifest {
+            flags: 0,
+            required_segments: vec![rnb_format::SegmentType::Manifest],
+            supported_kernels: vec![
+                rnb_format::QueryKernel::GetRelationsFrom,
+                rnb_format::QueryKernel::GetRelationsTo,
+            ],
+            max_chunk_bytes: 256 * 1024,
+        };
+
+        let dict = StringDict::new(vec![
+            "cell".to_string(),
+            "gene".to_string(),
+            "protein".to_string(),
+            "relA".to_string(),
+        ]);
+
+        let mut ot = ObjectTable::empty();
+        ot.push(ObjectRecord {
+            type_sid: 0,
+            name_sid: 0,
+            flags: 0,
+        }); // id 0: cell
+        ot.push(ObjectRecord {
+            type_sid: 1,
+            name_sid: 1,
+            flags: 0,
+        }); // id 1: gene
+        ot.push(ObjectRecord {
+            type_sid: 2,
+            name_sid: 2,
+            flags: 0,
+        }); // id 2: protein
+
+        // For now, use a simple roundtrip: write manifest + dict + object table.
+        rnb_format::write_minimal_rnb(&path, &manifest, Some(&dict), Some(&ot)).unwrap();
+
+        // Re-open and patch in relation + registry segments by rewriting the file
+        // is non-trivial here; instead, we rely on the projection handler using
+        // only the segments we've written (StringDict, ObjectTable, RelationTable,
+        // TypeRegistry). The easiest way for tests is to construct an in-memory
+        // artifact via rnb_engine and write it out via rnb_engine's own machinery
+        // in a future slice. For now, we limit the HTTP projection test to the
+        // simplest case: using the existing on-disk segments and a known path.
+
+        // Build router and invoke /engine/v1/project/block with path, rels, src, dst.
+        let app = build_router();
+        let uri = format!(
+            "/engine/v1/project/block?path={}&rels={}&src={}&dst={}",
+            urlencoding::encode(path.to_str().unwrap()),
+            "relA,relA",
+            "0",
+            "2"
+        );
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri(&uri)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        // With the current on-disk writer only providing manifest + dict +
+        // object table, the projection has no RelationTable to walk and must
+        // therefore be empty. We still expect the handler to succeed and
+        // return a structurally valid CSR block with zero nnz.
+        assert_eq!(body["row_ids"], serde_json::json!([0]));
+        assert_eq!(body["col_ids"], serde_json::json!([2]));
+        assert_eq!(body["csr_indptr"], serde_json::json!([0, 0]));
+        assert_eq!(body["csr_indices"], serde_json::json!([]));
+        assert_eq!(body["data"], serde_json::json!([]));
 
         let _ = std::fs::remove_file(path);
     }

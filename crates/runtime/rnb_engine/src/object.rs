@@ -63,9 +63,7 @@ impl Artifact {
         }
 
         match kernel {
-            crate::QueryKernel::GetObjectById => {
-                Ok(self.get_object(arg).into_iter().collect())
-            }
+            crate::QueryKernel::GetObjectById => Ok(self.get_object(arg).into_iter().collect()),
             crate::QueryKernel::ObjectsByType => {
                 let table = match self.object_table() {
                     Some(t) => t,
@@ -79,6 +77,13 @@ impl Artifact {
                     }
                 }
                 Ok(out)
+            }
+            // Object-level execute should not be used for relation kernels.
+            crate::QueryKernel::GetRelationsFrom | crate::QueryKernel::GetRelationsTo => {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "relation kernels are not supported by Artifact::execute; use execute_relations",
+                ))
             }
         }
     }
