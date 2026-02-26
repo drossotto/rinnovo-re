@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>AlphaFold Playground · Rinnovo RE</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0b1020;
+        --bg-alt: #111629;
+        --border: #262b3c;
+        --text: #f4f5f7;
+        --muted: #9ca3c7;
+        --accent: #2563eb;
+      }
+
+      body[data-theme="light"] {
+        --bg: #f4f4f7;
+        --bg-alt: #ffffff;
+        --border: #d0d4e0;
+        --text: #111827;
+        --muted: #6b7280;
+        --accent: #1d4ed8;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Roboto Slab", system-ui, -apple-system,
+          BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        font-size: 16px;
+      }
+
+      .page {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      header {
+        padding: 0.75rem 1.5rem;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg-alt);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+      }
+
+      .header-left {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+      }
+
+      .header-title {
+        font-size: 1rem;
+        font-weight: 600;
+      }
+
+      .header-subtitle {
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-size: 0.85rem;
+      }
+
+      .header-actions a {
+        color: var(--muted);
+        text-decoration: none;
+      }
+
+      .header-actions a:hover {
+        color: var(--text);
+      }
+
+      .header-actions button {
+        font-size: 0.8rem;
+        padding: 0.3rem 0.7rem;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+      }
+
+      .header-actions button:hover {
+        border-color: var(--accent);
+        color: var(--text);
+      }
+
+      main {
+        flex: 1;
+        padding: 1.5rem;
+        box-sizing: border-box;
+      }
+
+      .layout {
+        max-width: 1120px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.2fr);
+        gap: 1.25rem;
+      }
+
+      @media (max-width: 900px) {
+        .layout {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+
+      .panel {
+        border-radius: 4px;
+        border: 1px solid var(--border);
+        background: var(--bg-alt);
+        padding: 0.9rem 1rem;
+        box-sizing: border-box;
+      }
+
+      h1,
+      h2 {
+        margin: 0 0 0.5rem;
+        font-size: 0.95rem;
+      }
+
+      p {
+        margin: 0.25rem 0;
+        font-size: 0.9rem;
+        color: var(--muted);
+      }
+
+      label {
+        display: block;
+        font-size: 0.8rem;
+        margin: 0.75rem 0 0.25rem;
+        color: var(--muted);
+      }
+
+      input[type="text"],
+      textarea {
+        width: 100%;
+        box-sizing: border-box;
+        border-radius: 4px;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--text);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+        font-size: 0.8rem;
+        padding: 0.4rem 0.5rem;
+      }
+
+      textarea {
+        min-height: 140px;
+        resize: vertical;
+      }
+
+      .controls-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+      }
+
+      .controls-row button {
+        font-size: 0.8rem;
+        padding: 0.35rem 0.8rem;
+        border-radius: 3px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--text);
+        cursor: pointer;
+      }
+
+      .controls-row button:hover {
+        border-color: var(--accent);
+      }
+
+      .status-line {
+        margin-top: 0.6rem;
+        font-size: 0.8rem;
+        color: var(--muted);
+      }
+
+      .status-line strong {
+        color: var(--text);
+        font-weight: 500;
+      }
+
+      .sequence-block {
+        margin-top: 0.6rem;
+        border-radius: 4px;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        padding: 0.5rem 0.6rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+        font-size: 0.75rem;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+
+      .sequence-block h3 {
+        margin: 0 0 0.35rem;
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: var(--muted);
+      }
+
+      .aa-match {
+        color: var(--text);
+      }
+
+      .aa-mismatch {
+        color: #fb7185;
+        font-weight: 600;
+      }
+
+      .viewer-wrapper {
+        margin-top: 0.6rem;
+        border-radius: 4px;
+        border: 1px solid var(--border);
+        overflow: hidden;
+        background: #020617;
+        min-height: 260px;
+      }
+
+      .viewer-frame {
+        width: 100%;
+        height: 320px;
+        border: 0;
+      }
+
+      .viewer-note {
+        margin-top: 0.3rem;
+        font-size: 0.75rem;
+        color: var(--muted);
+      }
+
+      a {
+        color: var(--accent);
+      }
+
+      a:hover {
+        text-decoration: none;
+      }
+    </style>
+    <script>
+      (function () {
+        function applyTheme(theme) {
+          document.body.dataset.theme = theme;
+          try {
+            localStorage.setItem("rinnovo-theme", theme);
+          } catch (_) {
+            // ignore storage errors
+          }
+        }
+
+        window.toggleAlphaFoldTheme = function () {
+          var current = document.body.dataset.theme || "light";
+          var next = current === "light" ? "dark" : "light";
+          applyTheme(next);
+        };
+
+        function canonicaliseSequence(text) {
+          if (typeof text !== "string") return "";
+          return text
+            .toUpperCase()
+            .replace(/[^ACDEFGHIKLMNPQRSTVWY]/g, "");
+        }
+
+        function renderSequenceComparison(userSequence, canonicalSequence) {
+          var cleanedUser = canonicaliseSequence(userSequence);
+          var cleanedCanonical = canonicaliseSequence(canonicalSequence);
+          var maximumLength = Math.max(
+            cleanedUser.length,
+            cleanedCanonical.length
+          );
+          if (!maximumLength) {
+            return "<span>No sequence to compare yet.</span>";
+          }
+
+          var htmlParts = [];
+          for (var index = 0; index < maximumLength; index++) {
+            var userResidue =
+              index < cleanedUser.length ? cleanedUser.charAt(index) : "-";
+            var canonicalResidue =
+              index < cleanedCanonical.length
+                ? cleanedCanonical.charAt(index)
+                : "-";
+            var cssClass =
+              userResidue === canonicalResidue ? "aa-match" : "aa-mismatch";
+
+            htmlParts.push(
+              '<span class="' + cssClass + '">' + userResidue + "</span>"
+            );
+
+            if ((index + 1) % 50 === 0) {
+              htmlParts.push("<br/>");
+            }
+          }
+
+          return htmlParts.join("");
+        }
+
+        async function fetchAlphaFold() {
+          var idInput = document.getElementById("af-uniprot-id");
+          var sequenceInput = document.getElementById("af-sequence-input");
+          var statusElement = document.getElementById("af-status");
+          var canonicalElement = document.getElementById(
+            "af-sequence-canonical"
+          );
+          var userElement = document.getElementById("af-sequence-user");
+          var metadataElement = document.getElementById("af-metadata");
+          var viewerFrame = document.getElementById("af-viewer-frame");
+
+          if (!idInput || !statusElement) return;
+
+          var rawId = idInput.value || "";
+          var trimmedId = rawId.trim();
+          if (!trimmedId) {
+            statusElement.textContent =
+              "Enter a UniProt / AlphaFold accession first.";
+            return;
+          }
+
+          statusElement.textContent =
+            "Fetching prediction from AlphaFold for " + trimmedId + "…";
+          canonicalElement.textContent = "";
+          userElement.innerHTML = "";
+          metadataElement.textContent = "";
+
+          try {
+            var apiUrl =
+              "https://alphafold.ebi.ac.uk/api/prediction/" +
+              encodeURIComponent(trimmedId);
+            var response = await fetch(apiUrl);
+            if (!response.ok) {
+              throw new Error("AlphaFold HTTP " + response.status);
+            }
+            var payload = await response.json();
+
+            if (!Array.isArray(payload) || payload.length === 0) {
+              statusElement.textContent =
+                "No predictions returned for " + trimmedId + ".";
+              return;
+            }
+
+            var prediction = payload[0];
+            var canonicalSequence =
+              prediction && prediction.uniprotSequence
+                ? String(prediction.uniprotSequence)
+                : "";
+
+            canonicalElement.textContent =
+              canonicalSequence || "(no sequence in response)";
+
+            var userSequence = sequenceInput
+              ? sequenceInput.value || ""
+              : "";
+            userElement.innerHTML = renderSequenceComparison(
+              userSequence,
+              canonicalSequence
+            );
+
+            var description =
+              (prediction && prediction.uniprotDescription) || "";
+            var accession =
+              (prediction && prediction.uniprotAccession) || trimmedId;
+            var uniprotId = (prediction && prediction.uniprotId) || "";
+            metadataElement.textContent =
+              accession +
+              (uniprotId ? " · " + uniprotId : "") +
+              (description ? " · " + description : "");
+
+            if (viewerFrame) {
+              viewerFrame.src =
+                "https://alphafold.ebi.ac.uk/entry/" +
+                encodeURIComponent(accession);
+            }
+
+            statusElement.textContent =
+              "Loaded AlphaFold prediction for " + accession + ".";
+          } catch (error) {
+            statusElement.textContent =
+              "Error while talking to AlphaFold: " + String(error);
+          }
+        }
+
+        window.fetchAlphaFoldPrediction = fetchAlphaFold;
+
+        window.fillAlphaFoldExample = function () {
+          var idInput = document.getElementById("af-uniprot-id");
+          var sequenceInput = document.getElementById("af-sequence-input");
+          if (idInput) {
+            idInput.value = "P69905"; // Human hemoglobin subunit alpha
+          }
+          if (sequenceInput && !sequenceInput.value) {
+            sequenceInput.value =
+              "VLSPADKTNVKAAWGKVGAHAGEYGAEALERMFLSFPTTKTYFPHF";
+          }
+        };
+
+        document.addEventListener("DOMContentLoaded", function () {
+          var storedTheme = null;
+          try {
+            storedTheme = localStorage.getItem("rinnovo-theme");
+          } catch (_) {
+            storedTheme = null;
+          }
+          applyTheme(storedTheme === "dark" ? "dark" : "light");
+        });
+      })();
+    </script>
+  </head>
+  <body>
+    <div class="page">
+      <header>
+        <div class="header-left">
+          <div class="header-title">AlphaFold Playground</div>
+          <div class="header-subtitle">
+            Edit an amino acid sequence and compare it to the AlphaFold DB
+            prediction for a UniProt accession.
+          </div>
+        </div>
+        <div class="header-actions">
+          <a href="/#landing" target="_top">← Back to overview</a>
+          <button type="button" onclick="toggleAlphaFoldTheme()">Theme</button>
+        </div>
+      </header>
+      <main>
+        <div class="layout">
+          <section class="panel">
+            <h1>Sequence &amp; accession</h1>
+            <p>
+              Type a UniProt or AlphaFold accession that exists in the public
+              AlphaFold database, optionally provide your own sequence, and then
+              fetch the prediction.
+            </p>
+
+            <label for="af-uniprot-id">UniProt / AlphaFold accession</label>
+            <input
+              id="af-uniprot-id"
+              type="text"
+              spellcheck="false"
+              autocomplete="off"
+              inputmode="latin"
+              placeholder="e.g. P69905"
+            />
+
+            <label for="af-sequence-input">
+              Amino acid sequence (optional, one-letter codes)
+            </label>
+            <textarea
+              id="af-sequence-input"
+              spellcheck="false"
+              autocomplete="off"
+              inputmode="latin"
+              placeholder="Paste or edit an amino acid sequence here to compare against the AlphaFold canonical sequence."
+            ></textarea>
+
+            <div class="controls-row">
+              <button type="button" onclick="fetchAlphaFoldPrediction()">
+                Fetch from AlphaFold
+              </button>
+              <button type="button" onclick="fillAlphaFoldExample()">
+                Use example
+              </button>
+            </div>
+
+            <div id="af-status" class="status-line">
+              Enter an accession and click <strong>Fetch from AlphaFold</strong>
+              to get the prediction.
+            </div>
+          </section>
+
+          <section class="panel">
+            <h2>Prediction &amp; comparison</h2>
+            <p>
+              The public AlphaFold DB serves precomputed predictions for known
+              UniProt sequences. To mutate a sequence, you can edit it on the
+              left and visually compare it here.
+            </p>
+
+            <div class="sequence-block">
+              <h3>Canonical sequence (AlphaFold / UniProt)</h3>
+              <pre id="af-sequence-canonical"></pre>
+            </div>
+
+            <div class="sequence-block">
+              <h3>Your sequence (cleaned; mismatches in red)</h3>
+              <pre id="af-sequence-user"></pre>
+            </div>
+
+            <div class="sequence-block" style="margin-top: 0.9rem">
+              <h3>Entry metadata</h3>
+              <div id="af-metadata"></div>
+            </div>
+
+            <div class="viewer-wrapper" style="margin-top: 0.9rem">
+              <iframe
+                id="af-viewer-frame"
+                class="viewer-frame"
+                title="AlphaFold structure viewer"
+              ></iframe>
+            </div>
+            <div class="viewer-note">
+              AlphaFold’s own 3D viewer is embedded above where possible. If
+              embedding is blocked by the remote site, you can open the entry
+              directly on
+              <a
+                href="https://alphafold.ebi.ac.uk/"
+                target="_blank"
+                rel="noopener noreferrer"
+                >alphafold.ebi.ac.uk</a
+              >.
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

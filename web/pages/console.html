@@ -154,6 +154,55 @@
       button:hover {
         border-color: var(--accent);
       }
+
+      .sidebar-label {
+        display: block;
+        font-size: 0.8rem;
+        color: var(--muted);
+        margin: 0.35rem 0 0.15rem;
+      }
+
+      .sidebar-input-row {
+        display: flex;
+        gap: 0.3rem;
+        margin-bottom: 0.25rem;
+      }
+
+      .sidebar-input-row input[type="text"] {
+        flex: 1;
+        min-width: 0;
+        font-size: 0.8rem;
+        padding: 0.25rem 0.35rem;
+        border-radius: 3px;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .sidebar-input-row button {
+        white-space: nowrap;
+      }
+
+      .sidebar-hint {
+        font-size: 0.75rem;
+        color: var(--muted);
+      }
+
+      .enzyme-avatar {
+        width: 64px;
+        height: 64px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: radial-gradient(circle at 30% 20%, #1f2937, #020617);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 0.35rem;
+      }
+
+      body[data-theme="light"] .enzyme-avatar {
+        background: radial-gradient(circle at 30% 20%, #e5e7eb, #f9fafb);
+      }
     </style>
     <script>
       (function () {
@@ -252,6 +301,37 @@
           </ul>
         </div>
         <div class="sidebar-section">
+          <h2>Profile Enzyme</h2>
+          <div class="enzyme-avatar">
+            <canvas
+              id="enzyme-avatar-canvas"
+              width="64"
+              height="64"
+              aria-hidden="true"
+            ></canvas>
+          </div>
+          <label class="sidebar-label" for="enzyme-sequence-input">
+            Amino acid sequence
+          </label>
+          <div class="sidebar-input-row">
+            <input
+              id="enzyme-sequence-input"
+              type="text"
+              spellcheck="false"
+              autocomplete="off"
+              inputmode="latin"
+              maxlength="64"
+              placeholder="ACDEFGHIKLMNPQRSTVWY"
+            />
+            <button type="button" onclick="updateEnzymeSequence()">
+              Update
+            </button>
+          </div>
+          <p class="sidebar-hint">
+            One-letter codes; changes redraw your enzyme avatar.
+          </p>
+        </div>
+        <div class="sidebar-section">
           <h2>Artifacts</h2>
           <ul class="sidebar-list">
             <li><span>No artifacts yet.</span></li>
@@ -297,26 +377,203 @@
           return "https://rinnovo-re.onrender.com";
         }
 
-        function setSidebarError(message) {
-          var profileEl = document.getElementById("sidebar-profile");
-          var engineEl = document.getElementById("sidebar-engine");
-          var wsList = document.getElementById("sidebar-workspaces");
+          function setSidebarError(message) {
+            var profileEl = document.getElementById("sidebar-profile");
+            var engineEl = document.getElementById("sidebar-engine");
+            var wsList = document.getElementById("sidebar-workspaces");
 
-          if (profileEl) {
-            profileEl.textContent = "Profile: offline";
+            if (profileEl) {
+              profileEl.textContent = "Profile: offline";
+            }
+            if (engineEl) {
+              engineEl.textContent = "Engine: " + message;
+            }
+            if (wsList) {
+              wsList.innerHTML = "";
+              var li = document.createElement("li");
+              li.textContent = "Unable to load workspaces.";
+              wsList.appendChild(li);
+            }
           }
-          if (engineEl) {
-            engineEl.textContent = "Engine: " + message;
-          }
-          if (wsList) {
-            wsList.innerHTML = "";
-            var li = document.createElement("li");
-            li.textContent = "Unable to load workspaces.";
-            wsList.appendChild(li);
-          }
-        }
 
-        async function loadConsoleSession() {
+          function defaultEnzymeSequenceForProfile(profileId) {
+            var alphabet = "ACDEFGHIKLMNPQRSTVWY";
+            var seed = 0;
+            var i;
+            if (typeof profileId === "string" && profileId.length > 0) {
+              for (i = 0; i < profileId.length; i++) {
+                seed = (seed * 31 + profileId.charCodeAt(i)) >>> 0;
+              }
+            } else {
+              seed = 0x9e3779b9;
+            }
+
+            var length = 16 + (seed % 9); // 16–24 residues
+            var seq = "";
+            for (i = 0; i < length; i++) {
+              seed = (seed * 1664525 + 1013904223) >>> 0;
+              var idx = seed % alphabet.length;
+              seq += alphabet.charAt(idx);
+            }
+            return seq;
+          }
+
+          function enzymeStorageKey(profileId) {
+            return "rinnovo-enzyme-seq:" + (profileId || "default");
+          }
+
+          function loadStoredEnzymeSequence(profileId) {
+            try {
+              var key = enzymeStorageKey(profileId);
+              var value = localStorage.getItem(key);
+              if (typeof value === "string" && value.trim() !== "") {
+                return value.trim().toUpperCase();
+              }
+            } catch (_) {
+              // ignore storage errors
+            }
+            return null;
+          }
+
+          function storeEnzymeSequence(profileId, seq) {
+            try {
+              var key = enzymeStorageKey(profileId);
+              localStorage.setItem(key, seq);
+            } catch (_) {
+              // ignore storage errors
+            }
+          }
+
+          function aminoColor(code, index, total) {
+            var c = code.toUpperCase();
+            // Basic grouping by chemical class with deterministic hue fallback.
+            if (c === "D" || c === "E") return "#fb7185"; // acidic
+            if (c === "K" || c === "R" || c === "H") return "#60a5fa"; // basic
+            if (c === "S" || c === "T" || c === "N" || c === "Q")
+              return "#22c55e"; // polar
+            if (c === "F" || c === "Y" || c === "W") return "#a855f7"; // aromatic
+            if (
+              c === "G" ||
+              c === "A" ||
+              c === "V" ||
+              c === "L" ||
+              c === "I" ||
+              c === "M" ||
+              c === "P"
+            )
+              return "#f97316"; // hydrophobic
+
+            // Fallback: soft rainbow by position.
+            var t = total > 1 ? index / (total - 1) : 0.5;
+            var hue = Math.floor(200 + t * 100); // 200–300
+            return "hsl(" + hue + ", 85%, 65%)";
+          }
+
+          function renderEnzymeAvatar(sequence) {
+            var canvas = document.getElementById("enzyme-avatar-canvas");
+            if (!canvas || !canvas.getContext) return;
+
+            var cleaned = "";
+            if (typeof sequence === "string") {
+              cleaned = sequence
+                .toUpperCase()
+                .replace(/[^ACDEFGHIKLMNPQRSTVWY]/g, "");
+            }
+
+            var ctx = canvas.getContext("2d");
+            var w = canvas.width;
+            var h = canvas.height;
+            ctx.clearRect(0, 0, w, h);
+
+            if (!cleaned || cleaned.length === 0) {
+              return;
+            }
+
+            var cx = w / 2;
+            var cy = h / 2;
+            var n = cleaned.length;
+            var minR = Math.min(w, h) * 0.18;
+            var maxR = Math.min(w, h) * 0.46;
+
+            var points = [];
+            for (var i = 0; i < n; i++) {
+              var t = n > 1 ? i / (n - 1) : 0.5;
+              var angle = t * Math.PI * 2 * 0.9; // slightly open spiral
+              var radius = minR + t * (maxR - minR);
+              var x = cx + radius * Math.cos(angle);
+              var y = cy + radius * Math.sin(angle);
+              points.push({ x: x, y: y, aa: cleaned.charAt(i), t: t });
+            }
+
+            if (points.length > 1) {
+              ctx.beginPath();
+              ctx.lineWidth = 2;
+              ctx.strokeStyle = "rgba(148, 163, 184, 0.7)";
+              ctx.moveTo(points[0].x, points[0].y);
+              for (var j = 1; j < points.length; j++) {
+                ctx.lineTo(points[j].x, points[j].y);
+              }
+              ctx.stroke();
+            }
+
+            for (var k = 0; k < points.length; k++) {
+              var p = points[k];
+              var col = aminoColor(p.aa, k, points.length);
+              var r = 4.2;
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+              ctx.fillStyle = col;
+              ctx.fill();
+              ctx.lineWidth = 1;
+              ctx.strokeStyle = "rgba(15,23,42,0.9)";
+              ctx.stroke();
+            }
+          }
+
+          function initialiseEnzymeFromProfile(profile) {
+            if (!profile) return;
+            var profileId = profile.id || "prof_default";
+            window.rinnovoCurrentProfileId = profileId;
+
+            var stored = loadStoredEnzymeSequence(profileId);
+            var seq = stored || defaultEnzymeSequenceForProfile(profileId);
+
+            var input = document.getElementById("enzyme-sequence-input");
+            if (input) {
+              input.value = seq;
+            }
+
+            // Ensure a stored value so the avatar is stable across reloads.
+            if (!stored) {
+              storeEnzymeSequence(profileId, seq);
+            }
+
+            renderEnzymeAvatar(seq);
+          }
+
+          window.updateEnzymeSequence = function () {
+            var input = document.getElementById("enzyme-sequence-input");
+            if (!input) return;
+
+            var raw = input.value || "";
+            var cleaned = raw
+              .toUpperCase()
+              .replace(/[^ACDEFGHIKLMNPQRSTVWY]/g, "");
+
+            if (!cleaned) {
+              // If the user deletes everything, clear the avatar but don't
+              // overwrite the last stored value.
+              renderEnzymeAvatar("");
+              return;
+            }
+
+            var profileId = window.rinnovoCurrentProfileId || "prof_default";
+            storeEnzymeSequence(profileId, cleaned);
+            input.value = cleaned;
+            renderEnzymeAvatar(cleaned);
+          };
+
+          async function loadConsoleSession() {
           var base = registrarBaseUrl();
           var url = base + "/v1/console/session";
 
@@ -331,10 +588,11 @@
             }
             var data = await resp.json();
 
-            if (profileEl && data.profile) {
-              profileEl.textContent =
-                "Profile: " + data.profile.name + " (" + data.profile.id + ")";
-            }
+              if (profileEl && data.profile) {
+                profileEl.textContent =
+                  "Profile: " + data.profile.name + " (" + data.profile.id + ")";
+                initialiseEnzymeFromProfile(data.profile);
+              }
 
             if (engineEl) {
               if (data.engine) {
